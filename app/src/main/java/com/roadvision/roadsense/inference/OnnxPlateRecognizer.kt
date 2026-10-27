@@ -10,9 +10,13 @@ class OnnxPlateRecognizer(
     private val alphabet: List<Char>,
     private val blankIndex: Int,
 ) : PlateRecognizer {
+    /** Reused between crops; safe because inference consumes it before the next call. */
+    private var scratch: FloatArray? = null
+
     override fun recognize(rgb: ByteArray, width: Int, height: Int): PlateRecognition? {
         require(rgb.size == width * height * 3)
-        val prepared = TensorPreprocessor.prepare(ConvertedFrame(0, 0, width, height, 0, rgb), contract)
+        val prepared = TensorPreprocessor.prepare(ConvertedFrame(0, 0, width, height, 0, rgb), contract, scratch)
+        scratch = prepared.values
         val spec = contract.outputs.single()
         val output = runtime.run(
             assetPath, provider, contract.input.name, prepared.shape, prepared.values, setOf(spec.name),

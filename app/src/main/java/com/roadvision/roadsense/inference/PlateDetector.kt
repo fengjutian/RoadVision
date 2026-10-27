@@ -26,8 +26,12 @@ class OnnxPlateDetector(
         decode.maxDetections,
     )
 
+    /** Reused between frames; safe because inference consumes it before the next detect(). */
+    private var scratch: FloatArray? = null
+
     override fun detect(frame: ConvertedFrame): List<Detection> {
-        val prepared = TensorPreprocessor.prepare(frame, contract)
+        val prepared = TensorPreprocessor.prepare(frame, contract, scratch)
+        scratch = prepared.values
         val spec = contract.outputs.single()
         val output = runtime.run(
             assetPath, provider, contract.input.name, prepared.shape, prepared.values, setOf(spec.name),

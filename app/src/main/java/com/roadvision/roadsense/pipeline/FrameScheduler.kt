@@ -3,6 +3,7 @@ package com.roadvision.roadsense.pipeline
 import com.roadvision.roadsense.camera.ConvertedFrame
 import java.io.Closeable
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -45,6 +46,16 @@ class FrameScheduler(
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         if (pending.getAndSet(null) != null) onDropped()
-        executor.shutdownNow()
+        executor.shutdown()
+        // Do not return while `processor` is still running: the caller closes the ONNX session
+        // right after this, and tearing the session down under an in-flight run() corrupts native
+        // heap state (SIGSEGV / Scudo abort inside libonnxruntime.so).
+        val terminated = runCatching { executor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS) }
+            .getOrDefault(false)
+        if (!terminated) executor.shutdownNow()
+    }
+
+    private companion object {
+        const val SHUTDOWN_TIMEOUT_SECONDS = 2L
     }
 }

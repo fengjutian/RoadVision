@@ -17,12 +17,13 @@
 | 模型 I/O 契约 | IMPLEMENTED | `ModelContract`、`TensorSpec`；强制模型版本、SHA-256、布局、颜色和归一化信息 |
 | 模型清单校验 | IMPLEMENTED | `ModelBundleValidator` 校验资产路径限制在 `models/`、固定输入维度、NCHW/NHWC 通道数，以及检测 `[1,N,6]`、车道 `[1,1,H,W]`、OCR `[1,T,字母表+1]` 输出形状 |
 | 解码参数配置 | IMPLEMENTED | `DetectionDecodeConfig`、`LaneDecodeConfig`；置信度、NMS IoU、最大候选数、车道阈值来自清单 `decode` 块，可由设置页覆盖 |
-| 执行提供器回退 | IMPLEMENTED | 四个 Session 在开始采集前预加载；XNNPACK/NNAPI 失败自动重试 CPU，状态栏显示回退 |
+| 执行提供器回退 | IMPLEMENTED | Session 在开始采集前预加载，并用零输入对每个已声明模型做一次预热推理；Session 创建或首次推理失败都会重试 CPU，面板显示“已回退” |
 | 输出校验 | IMPLEMENTED | 维度、NaN/Inf、置信度、类别和归一化坐标检查 |
 | 坐标映射 | IMPLEMENTED | letterbox 正反向映射，坐标统一为预览归一化坐标 |
 | 车辆模型适配 | READY_FOR_ASSET | 支持 `[1,N,6]` 检测输出的阈值与 NMS；具体模型需填模型卡 |
 | 车道模型适配 | READY_FOR_ASSET | 支持二值概率掩码解码；具体输出必须与模型卡一致 |
-| CPU/XNNPACK/NNAPI | DEVICE_REQUIRED | 三种配置入口已提供；必须逐一记录成功率、回退和真机数据 |
+| CPU/XNNPACK/NNAPI | DEVICE_REQUIRED | 三种配置入口已提供；YOLO11n 短时真机上 CPU 推理约 154/216 ms 最快，XNNPACK 约 323/497 ms，NNAPI 首次推理 `ORT_FAIL` 后回退 CPU；仍需正式基准 |
+| 预处理与输入尺寸 | IMPLEMENTED | letterbox 映射预计算、mean/std 融合为 gain/bias；YUV→RGB 与旋转单遍融合；固定集对比 640/480/416/320，416 为速度/召回平衡点（见 `docs/VEHICLE_PERFORMANCE.md`） |
 | 性能统计 | IMPLEMENTED | 采集 FPS、分析 FPS、跳过帧、E2E P50/P95、推理 P50/P95、进程内存、热状态和错误计数；没有活跃流水线时不把帧计为已处理 |
 
 仓库不包含 ONNX 权重。将模型放入 APK 前，必须在
@@ -50,8 +51,10 @@
 `VehicleTracker` 使用类别一致性和 IoU 关联，时间戳必须单调。轨迹允许短时丢帧，超过
 `maximumMissedFrames` 或 `maximumIdleNs` 后删除。Track ID 仅为当前运行时临时编号，不能用于身份识别。
 
-`RoadOverlay` 绘制车辆框、类别、置信度、Track ID 和归一化车道点。模型坐标必须先经
+`RoadOverlayView` 绘制车辆框、类别、置信度、Track ID 和归一化车道点。它和 `PreviewView` 放在同一个
+`FrameLayout` 中并添加在预览之后，避免 Compose Canvas 在部分设备上被相机预览层遮挡。模型坐标必须先经
 `LetterboxTransform.modelToSource` 映射；CameraX 预览采用 `FILL_CENTER` 时，真机测试还需验证预览视口裁剪映射。
+开发机已用临时常量输出模型验证框、Track ID 和置信度标签可见；真实模型的坐标映射仍需真机复核。
 
 ## 4. P4：车牌与 OCR
 
@@ -82,6 +85,9 @@
 - 采集由前台 `CaptureService` 持有 CameraX；Activity 只挂预览 surface，熄屏/退到后台后
   `ImageAnalysis` 继续送入 `FrameScheduler`，通知栏常驻“正在采集”，停止采集会同时停止服务。
 - 设置页可停止/开始采集、选择保留期（7/30/90 天）、覆盖执行提供器和阈值、查看模型信息。
+- 布局按窗口尺寸自适应：横屏把诊断/事件放在右侧栏、相机画面占满剩余区域，竖屏折叠为紧凑摘要并可展开
+  完整诊断/事件；旋转时更新 `ImageAnalysis` 目标方向，使分析帧、叠加与预览方向一致。真机上的叠加对齐
+  （含 `FILL_CENTER` 裁剪）仍需按上述 P3 项复核。
 
 ## 6. P6：真机验收与发布
 

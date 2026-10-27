@@ -18,3 +18,6 @@ app/build/
 # never commit it until the licence review in docs/DEPENDENCIES.md clears it.
 .model-cache/
 app/src/main/assets/models/**/*.onnx
+# The local evaluation manifest references an ignored weight file. Keep it out of git so a
+# clean checkout falls back to NotConfigured; use model-bundle.vehicle-only.json.example.
+app/src/main/assets/models/model-bundle.json

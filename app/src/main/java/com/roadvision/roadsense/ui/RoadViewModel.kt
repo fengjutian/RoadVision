@@ -169,10 +169,10 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }.onFailure { error ->
                 if (generation != modelGeneration) return@onFailure
-                synchronized(pipelineLock) {
-                    activePipeline?.close()
-                    activePipeline = null
+                val retired = synchronized(pipelineLock) {
+                    activePipeline.also { activePipeline = null }
                 }
+                retired?.close()
                 mutableModelInfo.value = null
                 recorder.onError()
                 mutablePerception.value = PerceptionUiState()
@@ -228,10 +228,12 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
     fun reloadModels() {
         modelGeneration++
         viewModelScope.launch(Dispatchers.Default) {
-            synchronized(pipelineLock) {
-                activePipeline?.close()
-                activePipeline = null
+            // Detach first so no new frame can enter the retired pipeline, then close it. Closing
+            // waits for an in-flight run() to return instead of freeing the session under it.
+            val retired = synchronized(pipelineLock) {
+                activePipeline.also { activePipeline = null }
             }
+            retired?.close()
             mutableModelInfo.value = null
             mutablePerception.value = PerceptionUiState()
             mutableModelState.value = ModelRuntimeState.NotConfigured
@@ -311,10 +313,14 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
                     null
                 }
             }
-            failed?.close()
-            recorder.onError()
-            mutablePerception.value = PerceptionUiState()
-            mutableModelState.value = ModelRuntimeState.Failed(error.message ?: "模型推理失败")
+            // A pipeline that was already retired (reload, capture stop, ViewModel teardown) can
+            // throw "session was closed" from the frame thread; that is not a runtime failure.
+            if (failed != null) {
+                failed.close()
+                recorder.onError()
+                mutablePerception.value = PerceptionUiState()
+                mutableModelState.value = ModelRuntimeState.Failed(error.message ?: "模型推理失败")
+            }
         }
         sampleHealth(frame)
     }
@@ -327,11 +333,12 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
         stopCaptureService()
         CaptureBridge.controller = null
         cameraController.close()
+        // Waits for the worker to leave any in-flight inference before the session is closed.
         scheduler.close()
-        synchronized(pipelineLock) {
-            activePipeline?.close()
-            activePipeline = null
+        val retired = synchronized(pipelineLock) {
+            activePipeline.also { activePipeline = null }
         }
+        retired?.close()
         database.close()
     }
 }

@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.util.TypedValue
 import android.view.View
 import com.roadvision.roadsense.inference.LaneResult
 import com.roadvision.roadsense.tracking.TrackedVehicle
@@ -12,8 +13,8 @@ import com.roadvision.roadsense.tracking.TrackedVehicle
 /**
  * Draws perception results inside the same Android view hierarchy as [androidx.camera.view.PreviewView].
  *
- * A Compose Canvas is hosted above Compose content but below AndroidView children on some devices,
- * so the camera preview can cover it. This View is added to the preview's FrameLayout after
+ * On some devices AndroidView children draw above the Compose layer, so a Compose Canvas can be
+ * covered by the camera preview. This View is added to the preview's FrameLayout after
  * PreviewView, which keeps the boxes visible without relying on interop z-order.
  */
 class RoadOverlayView(context: Context) : View(context) {
@@ -21,6 +22,10 @@ class RoadOverlayView(context: Context) : View(context) {
     private var lanes: LaneResult? = null
     private var sourceWidth: Int = 0
     private var sourceHeight: Int = 0
+
+    init {
+        setWillNotDraw(false)
+    }
 
     private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(255, 200, 87)
@@ -34,7 +39,7 @@ class RoadOverlayView(context: Context) : View(context) {
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 12f * resources.displayMetrics.scaledDensity
+        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12f, resources.displayMetrics)
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
     }
 

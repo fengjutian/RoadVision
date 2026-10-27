@@ -101,7 +101,8 @@ private fun inferenceText(running: ModelRuntimeState.Running?, diagnostics: Diag
     if (running == null) {
         "未启用 —/— ms"
     } else {
-        "${running.provider} ${metric(diagnostics.inferenceP50Ms)}/${metric(diagnostics.inferenceP95Ms)} ms"
+        val provider = if (running.fallbackToCpu) "${running.provider}（已回退）" else running.provider
+        "$provider ${metric(diagnostics.inferenceP50Ms)}/${metric(diagnostics.inferenceP95Ms)} ms"
     }
 
 @Composable
@@ -117,6 +118,33 @@ private fun statusText(status: CameraStatus): String = when (status) {
     CameraStatus.Running -> "相机运行中 · 本地处理 · 不保存原始帧"
     CameraStatus.Stopped -> "相机已停止"
     is CameraStatus.Error -> "错误：${status.message}"
+}
+
+/** Short camera state for the compact portrait header, where the full sentence does not fit. */
+fun cameraStatusLabel(status: CameraStatus): String = when (status) {
+    CameraStatus.Starting -> "相机启动中"
+    CameraStatus.Running -> "相机运行中"
+    CameraStatus.Stopped -> "相机已停止"
+    is CameraStatus.Error -> "相机错误"
+}
+
+/**
+ * One-line metric summary for the collapsed portrait panel. Camera rate is always meaningful; the
+ * analysis rate and latency are only shown while a pipeline is running, matching the full panel.
+ */
+fun compactDiagnosticsLine(
+    diagnostics: DiagnosticsState,
+    modelState: ModelRuntimeState,
+    vehicleCount: Int,
+): String {
+    val running = modelState as? ModelRuntimeState.Running
+    val analysis = if (running == null) "—" else "${format(diagnostics.processedFps)} FPS"
+    val latency = if (running == null) {
+        "—"
+    } else {
+        diagnostics.lastLatencyMs?.let { "${format(it)} ms" } ?: "—"
+    }
+    return "采集 ${format(diagnostics.cameraFps)} FPS · 分析 $analysis · 延迟 $latency · 检测 $vehicleCount"
 }
 
 private fun format(value: Double): String = String.format(Locale.US, "%.1f", value)

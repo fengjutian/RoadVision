@@ -38,5 +38,28 @@ class FrameSchedulerTest {
         }
     }
 
+    /**
+     * The pipeline is closed right after the scheduler, and closing an ONNX session while its
+     * run() is executing crashes natively. close() therefore has to wait for the worker.
+     */
+    @Test
+    fun closeWaitsForTheFrameInFlight() {
+        val started = CountDownLatch(1)
+        val finished = CountDownLatch(1)
+        val scheduler = FrameScheduler(onDropped = {}) {
+            started.countDown()
+            Thread.sleep(250)
+            finished.countDown()
+        }
+        try {
+            scheduler.submit(frame(1))
+            assertEquals(true, started.await(2, TimeUnit.SECONDS))
+            scheduler.close()
+            assertEquals("close() returned while the processor was still running", 0L, finished.count)
+        } finally {
+            scheduler.close()
+        }
+    }
+
     private fun frame(id: Long) = ConvertedFrame(id, id, 1, 1, 0, byteArrayOf(0, 0, 0))
 }

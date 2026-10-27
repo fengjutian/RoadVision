@@ -8,6 +8,9 @@ import ai.onnxruntime.TensorInfo
 import java.io.Closeable
 import java.nio.FloatBuffer
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 enum class ExecutionProvider { CPU, XNNPACK, NNAPI }
 
@@ -17,6 +20,15 @@ data class TensorOutput(val name: String, val shape: LongArray, val values: Floa
 class OrtRuntimeManager(private val context: Context) : Closeable {
     private val environment = OrtEnvironment.getEnvironment()
     private val sessions = ConcurrentHashMap<SessionKey, OrtSession>()
+
+    /**
+     * Guards the native session lifetime. Closing an [OrtSession] while another thread is inside
+     * [OrtSession.run] frees the graph under the running kernel, which surfaces as a SIGSEGV or a
+     * Scudo "invalid chunk state" abort inside libonnxruntime.so instead of a Java exception. Runs
+     * hold the read lock; [close] takes the write lock so it waits for the in-flight frame.
+     */
+    private val gate = ReentrantReadWriteLock()
+    @Volatile private var closed = false
 
     fun session(assetPath: String, provider: ExecutionProvider): OrtSession =
         sessions.computeIfAbsent(SessionKey(assetPath, provider)) {
@@ -38,7 +50,8 @@ class OrtRuntimeManager(private val context: Context) : Closeable {
         inputShape: LongArray,
         input: FloatArray,
         outputNames: Set<String>,
-    ): Map<String, TensorOutput> {
+    ): Map<String, TensorOutput> = gate.read {
+        check(!closed) { "ONNX Runtime session was closed" }
         require(inputShape.fold(1L, Long::times) == input.size.toLong())
         OnnxTensor.createTensor(environment, FloatBuffer.wrap(input), inputShape).use { tensor ->
             session(assetPath, provider).run(mapOf(inputName to tensor), outputNames).use { result ->
@@ -80,8 +93,12 @@ class OrtRuntimeManager(private val context: Context) : Closeable {
     }
 
     override fun close() {
-        sessions.values.forEach(OrtSession::close)
-        sessions.clear()
+        gate.write {
+            if (closed) return@write
+            closed = true
+            sessions.values.forEach(OrtSession::close)
+            sessions.clear()
+        }
         // OrtEnvironment is a process-wide singleton. Closing it here would leave later
         // pipeline reloads (for example after "重新加载模型") with a dead environment.
     }

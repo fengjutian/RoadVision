@@ -4,8 +4,11 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -15,10 +18,18 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +41,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +56,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.roadvision.roadsense.camera.CameraController
-import com.roadvision.roadsense.camera.CameraStatus
 import com.roadvision.roadsense.diagnostics.ReportExporter
 import com.roadvision.roadsense.inference.LaneResult
 import com.roadvision.roadsense.tracking.TrackedVehicle
@@ -61,6 +72,7 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
         var permissionRequested by remember { mutableStateOf(false) }
         var notificationRequested by remember { mutableStateOf(false) }
         var showSettings by remember { mutableStateOf(false) }
+        var detailPanelExpanded by rememberSaveable { mutableStateOf(false) }
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             permissionRequested = true
             hasPermission = granted
@@ -92,6 +104,25 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
 
+        // CameraX samples the display rotation when the analyser is bound, so a rotation after
+        // that point has to be pushed explicitly; otherwise the analysed frames (and the overlay
+        // built from them) keep the old orientation while PreviewView rotates the preview.
+        DisposableEffect(view) {
+            val displayManager = context.getSystemService(DisplayManager::class.java)
+            val listener = object : DisplayManager.DisplayListener {
+                override fun onDisplayAdded(displayId: Int) = Unit
+                override fun onDisplayRemoved(displayId: Int) = Unit
+                override fun onDisplayChanged(displayId: Int) {
+                    val display = view.display ?: return
+                    if (displayId != display.displayId) return
+                    viewModel.cameraController.updateTargetRotation(display.rotation)
+                }
+            }
+            displayManager?.registerDisplayListener(listener, Handler(Looper.getMainLooper()))
+            view.display?.rotation?.let(viewModel.cameraController::updateTargetRotation)
+            onDispose { displayManager?.unregisterDisplayListener(listener) }
+        }
+
         LaunchedEffect(Unit) {
             if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
         }
@@ -110,50 +141,93 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             if (!hasPermission || !captureEnabled) viewModel.stopCaptureService()
         }
 
-        Box(Modifier.fillMaxSize().background(Color(0xFF08110E))) {
-            when {
-                !hasPermission -> PermissionMessage(
-                    permissionRequested = permissionRequested,
-                    onRetry = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                    onOpenSettings = { openAppSettings(context) },
-                )
-                !captureEnabled -> PausedMessage(onResume = { viewModel.setCaptureEnabled(true) })
-                else -> CameraPreview(
-                    controller = viewModel.cameraController,
-                    onReady = viewModel::startCaptureService,
-                    vehicles = perception.vehicles,
-                    lanes = perception.lanes,
-                    sourceWidth = perception.sourceWidth,
-                    sourceHeight = perception.sourceHeight,
-                )
-            }
-            Column(Modifier.align(Alignment.BottomCenter).background(Color(0xD908110E))) {
-                PlateEventList(events, viewModel::deleteEvent, viewModel::deleteAllEvents)
-                DiagnosticsPanel(status, diagnostics, modelState, perception.vehicles.size)
-                if (status is CameraStatus.Error && hasPermission && captureEnabled) {
-                    Button(
-                        onClick = viewModel::restartCapture,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    ) { Text("重新启动相机") }
-                }
-                if (!perception.modelsReady) {
-                    Text(
-                        modelStatusText(modelState),
-                        color = Color(0xFFFFC857),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF08110E))) {
+            val screenLayout = screenLayoutFor(maxWidth.value, maxHeight.value)
+            when (screenLayout) {
+                ScreenLayout.PORTRAIT -> {
+                    PreviewPane(
+                        modifier = Modifier.fillMaxSize(),
+                        hasPermission = hasPermission,
+                        captureEnabled = captureEnabled,
+                        permissionRequested = permissionRequested,
+                        onRetryPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                        onOpenSettings = { openAppSettings(context) },
+                        onResume = { viewModel.setCaptureEnabled(true) },
+                        controller = viewModel.cameraController,
+                        onReady = viewModel::startCaptureService,
+                        vehicles = perception.vehicles,
+                        lanes = perception.lanes,
+                        sourceWidth = perception.sourceWidth,
+                        sourceHeight = perception.sourceHeight,
                     )
-                    if (modelState is ModelRuntimeState.Failed) {
-                        Button(
-                            onClick = viewModel::configureModels,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        ) { Text("重新加载模型") }
+                    SettingsButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .windowInsetsPadding(
+                                WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.End),
+                            )
+                            .padding(12.dp),
+                    )
+                    PortraitControlPanel(
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        status = status,
+                        diagnostics = diagnostics,
+                        modelState = modelState,
+                        vehicleCount = perception.vehicles.size,
+                        modelsReady = perception.modelsReady,
+                        events = events,
+                        expanded = detailPanelExpanded,
+                        maxPanelHeight = maxHeight * PORTRAIT_PANEL_MAX_HEIGHT_FRACTION,
+                        onToggleExpanded = { detailPanelExpanded = !detailPanelExpanded },
+                        onRestartCapture = viewModel::restartCapture,
+                        onDeleteEvent = viewModel::deleteEvent,
+                        onDeleteAllEvents = viewModel::deleteAllEvents,
+                        onReloadModels = viewModel::configureModels,
+                    )
+                }
+                ScreenLayout.LANDSCAPE -> Row(Modifier.fillMaxSize()) {
+                    // The picture keeps the whole window height; diagnostics move to the side
+                    // column instead of covering half of the road.
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        PreviewPane(
+                            modifier = Modifier.fillMaxSize(),
+                            hasPermission = hasPermission,
+                            captureEnabled = captureEnabled,
+                            permissionRequested = permissionRequested,
+                            onRetryPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                            onOpenSettings = { openAppSettings(context) },
+                            onResume = { viewModel.setCaptureEnabled(true) },
+                            controller = viewModel.cameraController,
+                            onReady = viewModel::startCaptureService,
+                            vehicles = perception.vehicles,
+                            lanes = perception.lanes,
+                            sourceWidth = perception.sourceWidth,
+                            sourceHeight = perception.sourceHeight,
+                        )
+                        SettingsButton(
+                            onClick = { showSettings = true },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                                .padding(12.dp),
+                        )
                     }
+                    LandscapeSidePanel(
+                        modifier = Modifier.width(LANDSCAPE_SIDE_PANEL_WIDTH).fillMaxHeight(),
+                        status = status,
+                        diagnostics = diagnostics,
+                        modelState = modelState,
+                        vehicleCount = perception.vehicles.size,
+                        modelsReady = perception.modelsReady,
+                        events = events,
+                        onRestartCapture = viewModel::restartCapture,
+                        onDeleteEvent = viewModel::deleteEvent,
+                        onDeleteAllEvents = viewModel::deleteAllEvents,
+                        onReloadModels = viewModel::configureModels,
+                    )
                 }
             }
-            Button(
-                onClick = { showSettings = true },
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-            ) { Text("设置") }
         }
 
         if (showSettings) {
@@ -181,6 +255,44 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             )
         }
     }
+}
+
+/**
+ * Camera picture, overlay and the permission/paused states, sized by whichever layout slot hosts
+ * it: the whole window in portrait, the area left of the diagnostics column in landscape.
+ */
+@Composable
+private fun PreviewPane(
+    hasPermission: Boolean,
+    captureEnabled: Boolean,
+    permissionRequested: Boolean,
+    onRetryPermission: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onResume: () -> Unit,
+    controller: CameraController,
+    onReady: () -> Unit,
+    vehicles: List<TrackedVehicle>,
+    lanes: LaneResult?,
+    sourceWidth: Int,
+    sourceHeight: Int,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier) {
+        when {
+            !hasPermission -> PermissionMessage(
+                permissionRequested = permissionRequested,
+                onRetry = onRetryPermission,
+                onOpenSettings = onOpenSettings,
+            )
+            !captureEnabled -> PausedMessage(onResume = onResume)
+            else -> CameraPreview(controller, onReady, vehicles, lanes, sourceWidth, sourceHeight)
+        }
+    }
+}
+
+@Composable
+private fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(onClick = onClick, modifier = modifier) { Text("设置") }
 }
 
 @Composable

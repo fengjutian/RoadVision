@@ -37,9 +37,17 @@ class CameraController(
     private val frameIds = AtomicLong()
     private var provider: ProcessCameraProvider? = null
     private var preview: Preview? = null
+    private var analysis: ImageAnalysis? = null
     private var lastContext: Context? = null
     private var lastOwner: LifecycleOwner? = null
     @Volatile private var surfaceProvider: Preview.SurfaceProvider? = null
+    /**
+     * Display rotation the analyser output must be upright for, or `null` until the UI reports
+     * one. CameraX samples the display rotation only when a use case is bound, so a device that is
+     * rotated after capture started would otherwise keep producing landscape-ordered frames while
+     * `PreviewView` rotates the preview itself, and the overlay would no longer match the picture.
+     */
+    @Volatile private var targetRotation: Int? = null
     private var generation = 0L
 
     /**
@@ -57,6 +65,20 @@ class CameraController(
         }
     }
 
+    /**
+     * Tells the analyser which display rotation its frames must be upright for.
+     *
+     * Must be called on the main thread, like every other CameraX use-case mutation. It is safe to
+     * call before [start]: the rotation is then applied when the use cases are created. Calling it
+     * with the current value is a no-op, and invalid values are ignored.
+     */
+    fun updateTargetRotation(rotation: Int) {
+        val normalized = normalizeSurfaceRotation(rotation) ?: return
+        if (targetRotation == normalized) return
+        targetRotation = normalized
+        analysis?.targetRotation = normalized
+    }
+
     fun start(context: Context, owner: LifecycleOwner) {
         val requestGeneration = ++generation
         lastContext = context
@@ -72,12 +94,14 @@ class CameraController(
                     Preview.Builder().build().also { it.setSurfaceProvider(surface) }
                 }
                 preview = currentPreview
-                val analysis = ImageAnalysis.Builder()
+                val analysisBuilder = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-                    .build()
+                targetRotation?.let { analysisBuilder.setTargetRotation(it) }
+                val currentAnalysis = analysisBuilder.build()
+                analysis = currentAnalysis
                 recorder.onAnalysisFormat(ANALYSIS_FORMAT)
-                analysis.setAnalyzer(analyzerExecutor) { image ->
+                currentAnalysis.setAnalyzer(analyzerExecutor) { image ->
                     // Stamp before the conversion: this clock reading is the latency origin.
                     val ingressNs = System.nanoTime()
                     recorder.onCaptured()
@@ -91,7 +115,8 @@ class CameraController(
                         image.close()
                     }
                 }
-                val useCases: Array<UseCase> = currentPreview?.let { arrayOf(it, analysis) } ?: arrayOf(analysis)
+                val useCases: Array<UseCase> =
+                    currentPreview?.let { arrayOf(it, currentAnalysis) } ?: arrayOf(currentAnalysis)
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, *useCases)
                 onStatus(CameraStatus.Running)
@@ -107,6 +132,7 @@ class CameraController(
         provider?.unbindAll()
         provider = null
         preview = null
+        analysis = null
         onStatus(CameraStatus.Stopped)
     }
 

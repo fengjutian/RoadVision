@@ -1,0 +1,51 @@
+package com.roadvision.roadsense.inference
+
+import com.roadvision.roadsense.camera.ConvertedFrame
+
+interface VehicleDetector {
+    val contract: ModelContract
+    fun detect(frame: ConvertedFrame): List<Detection>
+}
+
+/** Decoder for reviewed models exported as [1, N, 6]: x1,y1,x2,y2,score,classId. */
+class VehicleOutputDecoder(
+    private val labels: Map<Int, String>,
+    private val confidenceThreshold: Float,
+    private val nmsIouThreshold: Float,
+    private val maxDetections: Int = 100,
+) {
+    init {
+        require(confidenceThreshold in 0f..1f && nmsIouThreshold in 0f..1f)
+        require(maxDetections in 1..1_000)
+    }
+
+    fun decode(rows: Array<FloatArray>, frameId: Long, timestampNs: Long): List<Detection> {
+        val candidates = rows.mapNotNull { row ->
+            require(row.size == 6) { "Vehicle output row must contain 6 values" }
+            OutputValidator.validateFinite(row, "vehicle output")
+            val score = OutputValidator.confidence(row[4])
+            if (score < confidenceThreshold) return@mapNotNull null
+            val classId = row[5].toInt()
+            require(row[5] == classId.toFloat()) { "Class ID must be an integer" }
+            // The bundle's label map is the class allow-list: a COCO model also reports persons,
+            // bicycles or furniture, which must not enter vehicle tracking.
+            val label = labels[classId] ?: return@mapNotNull null
+            Detection(
+                classId = classId,
+                label = label,
+                confidence = score,
+                box = OutputValidator.normalizedBox(row[0], row[1], row[2], row[3]),
+                frameId = frameId,
+                timestampNs = timestampNs,
+            )
+        }.sortedByDescending(Detection::confidence).take(maxDetections)
+
+        val selected = mutableListOf<Detection>()
+        candidates.forEach { candidate ->
+            if (selected.none { it.classId == candidate.classId && it.box.iou(candidate.box) > nmsIouThreshold }) {
+                selected += candidate
+            }
+        }
+        return selected
+    }
+}
