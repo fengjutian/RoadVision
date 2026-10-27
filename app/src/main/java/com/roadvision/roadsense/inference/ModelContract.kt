@@ -7,6 +7,15 @@ enum class TensorLayout { NCHW, NHWC }
 enum class TensorDataType { FLOAT32 }
 enum class ColorOrder { RGB, BGR }
 
+/** How the source frame is fitted into the model input. */
+enum class ResizeMode {
+    /** Preserve aspect ratio and pad with [ModelContract.padPixel]. */
+    LETTERBOX,
+
+    /** Scale x and y independently, as Ultra-Fast-Lane-Detection training does. */
+    STRETCH,
+}
+
 data class TensorSpec(
     val name: String,
     val shape: LongArray,
@@ -30,6 +39,8 @@ data class ModelContract(
      * near the top and bottom of a 4:3 frame.
      */
     val padPixel: Int = 114,
+    /** Letterboxing keeps geometry but shifts lanes; UFLD models were resized with x/y stretch. */
+    val resizeMode: ResizeMode = ResizeMode.LETTERBOX,
 ) {
     init {
         require(id.isNotBlank() && version.isNotBlank())

@@ -3,6 +3,7 @@ package com.roadvision.roadsense.inference
 import android.content.Context
 import com.roadvision.roadsense.pipeline.DetectionDecodeConfig
 import com.roadvision.roadsense.pipeline.LaneDecodeConfig
+import com.roadvision.roadsense.pipeline.LaneDecodeType
 import com.roadvision.roadsense.pipeline.LaneModelConfig
 import com.roadvision.roadsense.pipeline.ModelAssetConfig
 import com.roadvision.roadsense.pipeline.ModelBundleValidator
@@ -31,10 +32,15 @@ object ModelBundleConfigLoader {
         val provider = ExecutionProvider.valueOf(root.optString("provider", "CPU").uppercase())
         val vehicle = root.getJSONObject("vehicle")
         val lane = root.optJSONObject("lane")?.let { json ->
+            val decode = json.optJSONObject("decode")
             LaneModelConfig(
                 asset = laneAsset(json),
                 decode = LaneDecodeConfig(
-                    laneDecodeThreshold(json.optJSONObject("decode")),
+                    threshold = laneDecodeThreshold(decode),
+                    type = LaneDecodeType.valueOf(
+                        decode?.optString("type", "mask")?.uppercase() ?: "MASK",
+                    ),
+                    rowAnchors = decode?.optJSONArray("rowAnchors")?.floatArray()?.toList() ?: emptyList(),
                 ),
             )
         }
@@ -110,6 +116,7 @@ object ModelBundleConfigLoader {
         mean = json.optJSONArray("mean")?.floatArray() ?: floatArrayOf(0f, 0f, 0f),
         std = json.optJSONArray("std")?.floatArray() ?: floatArrayOf(1f, 1f, 1f),
         padPixel = json.optInt("padPixel", 114),
+        resizeMode = ResizeMode.valueOf(json.optString("resize", "letterbox").uppercase()),
     )
 
     private fun tensor(json: JSONObject) = TensorSpec(

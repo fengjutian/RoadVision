@@ -7,6 +7,11 @@ interface LaneDetector {
     fun detect(frame: ConvertedFrame): LaneResult
 }
 
+/** Turns one lane head's flattened output into polylines. */
+interface LaneDecoder {
+    fun decode(values: FloatArray, frameId: Long, timestampNs: Long): LaneResult
+}
+
 /**
  * Decoder for a binary lane probability map in row-major order.
  *
@@ -22,7 +27,7 @@ class LaneMaskDecoder(
     private val rowStride: Int = 8,
     private val maxLanes: Int = 3,
     private val minimumPoints: Int = 3,
-) {
+) : LaneDecoder {
     init {
         require(width > 0 && height > 0 && threshold in 0f..1f && rowStride > 0)
         require(maxLanes in 1..8)
@@ -39,7 +44,7 @@ class LaneMaskDecoder(
         var scoreSum = 0f
     }
 
-    fun decode(probabilities: FloatArray, frameId: Long, timestampNs: Long): LaneResult {
+    override fun decode(probabilities: FloatArray, frameId: Long, timestampNs: Long): LaneResult {
         require(probabilities.size == width * height)
         OutputValidator.validateFinite(probabilities, "lane output")
         for (score in probabilities) {

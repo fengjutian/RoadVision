@@ -162,7 +162,7 @@ object PipelineFactory {
             lane.asset?.let { asset ->
                 OnnxLaneDetector(
                     asset.contract, asset.assetPath, config.provider, runtime,
-                    lane.decode.threshold,
+                    lane.decode,
                 )
             } ?: ClassicalLaneDetector(lane.decode.threshold)
         },

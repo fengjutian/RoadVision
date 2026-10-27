@@ -17,10 +17,31 @@ data class DetectionDecodeConfig(
     }
 }
 
-data class LaneDecodeConfig(val threshold: Float = 0.5f) {
+/** How the lane head's output tensor is turned into polylines. */
+enum class LaneDecodeType {
+    /** One-channel probability mask of shape [1,1,H,W]. */
+    MASK,
+
+    /** Ultra-Fast-Lane-Detection grid logits of shape [1, cells+1, rows, lanes]. */
+    UFLD,
+}
+
+data class LaneDecodeConfig(
+    val threshold: Float = 0.5f,
+    val type: LaneDecodeType = LaneDecodeType.MASK,
+    /** Normalised y of each row anchor, ascending; required for [LaneDecodeType.UFLD]. */
+    val rowAnchors: List<Float> = emptyList(),
+) {
     init {
         require(threshold.isFinite() && threshold in 0f..1f) {
             "Lane probability threshold must be in [0,1]: $threshold"
+        }
+        require(rowAnchors.all { it.isFinite() && it in 0f..1f }) {
+            "Row anchors must be normalised coordinates in [0,1]"
+        }
+        require(rowAnchors.isEmpty() || rowAnchors.size >= 2) { "Row anchors need at least two rows" }
+        if (type == LaneDecodeType.UFLD) {
+            require(rowAnchors.size >= 3) { "UFLD decoding needs the model's row anchors" }
         }
     }
 }
