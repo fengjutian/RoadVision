@@ -38,11 +38,18 @@
   “—”，并显示“推理未启用”。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 54 项单元测试，生成
+`BUILD SUCCESSFUL`，当前共有 59 项单元测试，生成
 `app/build/outputs/apk/debug/app-debug.apk`。APK 已包含 P2–P5 运行时代码，
 但不包含车辆、车道、车牌或 OCR 权重；在合法模型资产与模型卡就绪前，UI 明确保持模型禁用状态。
 车辆-only 模板见 `app/src/main/assets/models/model-bundle.vehicle-only.json.example`，
 用于在其余权重未就绪时先验证车辆检测链路。
+
+真机数据现状：2026-10-27 在 HONOR MLM-AN00（Android 17 / SDK 37）导出过一次**仅采集**
+基线，`cameraFps` 7.87、约 7 分钟、无推理；该导出为 `schemaVersion` 1，其
+`processedFps`、延迟与内存口径错误，不能作为 15 FPS 或延迟结论。导出已升级到
+`schemaVersion` 3：延迟改由分析器入口单调时钟计算并附带相机时钟偏移/异常计数，内存区分
+进程 PSS 与整机已用内存，新增实际分析尺寸/旋转/格式与采集时长，字段口径见
+`docs/DEVICE_TEST_PLAN.md` 第 5.1 节。
 
 **已确定的项目决定：** 项目名
 RoadVision；默认本地处理，未来允许用户主动上传；首版车辆检测、车道识别、跟踪、车牌
@@ -50,10 +57,11 @@ OCR；交付内部测试 APK；持续稳定 15 FPS 为目标；技术路线 Kotl
 CameraX + YOLO ONNX + ONNX Runtime；闭源商业用途。
 
 **尚未完成的前置任务：** 1. 确认荣耀真机型号、SoC、Android/MagicOS
-版本。 2. 完成模型代码、权重、训练数据、OCR 字库及所有依赖许可证审查。
+版本；导出已记录 MLM-AN00 / SM8850 / Android 17（SDK 37），仍需确认该机即为验收目标机。
+2. 完成模型代码、权重、训练数据、OCR 字库及所有依赖许可证审查。
 3. 为已批准模型填写精确输入输出契约、标签/字符集并加入资产。 4.
 在真机验证连续采集、旋转、权限撤销和资源释放。 5.
-建立真机性能基准；当前无 RoadVision 真机 FPS 实测结果。 6.
+建立真机性能基准；目前只有仅采集基线（7.87 FPS、无推理），15 FPS 与延迟仍无实测结论。 6.
 冻结测试视频/数据集与准确率验收阈值。
 
 **仍需真机验证：** 熄屏采集依赖前台 `camera` 类型服务，通知权限、Android 14/15

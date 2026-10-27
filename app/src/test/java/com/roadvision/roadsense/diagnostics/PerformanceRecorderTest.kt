@@ -79,10 +79,13 @@ class PerformanceRecorderTest {
     }
 
     @Test
-    fun sessionElapsedIsDerivedFromTheMonotonicClock() {
-        var now = 0L
+    fun sessionClockStartsAtFirstFrame() {
+        var now = 1_000_000_000L
         val recorder = PerformanceRecorder(clockNs = { now }, wallClockMs = { 1_500L })
-        now = 42_000_000_000L
+        assertEquals(0L, recorder.state.value.sessionStartedAtEpochMs)
+
+        recorder.onCaptured()
+        now = 43_000_000_000L
         recorder.onCaptured()
 
         val state = recorder.state.value

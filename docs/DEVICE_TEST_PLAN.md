@@ -2,10 +2,13 @@
 
 ## 1. 当前状态
 
--   荣耀具体机型：待确认。
--   SoC / RAM：待实机记录。
--   Android / MagicOS 版本：待实机记录。
--   本项目真机 FPS：**尚无实测数据**。
+-   荣耀具体机型：HONOR MLM-AN00（`Build.DEVICE` = HNMLM，SoC = SM8850）。
+-   RAM：待实机记录。2026-10-27 导出中的 7,656 MB 是**整机已用内存**，不是可用容量。
+-   Android / MagicOS：Android 17（SDK 37），构建
+    `MLM-AN00 11.0.0.111(SP7C00E110R101P2)`。
+-   本项目真机数据：**只有一次仅采集基线**。2026-10-27 导出 `cameraFps` 7.87、
+    时长约 7 分钟、无推理。该导出为 `schemaVersion` 1，其 `processedFps`、延迟与内存字段
+    口径错误（见第 5 节），**不得作为 15 FPS 或延迟验收数据**。
 -   15 FPS：验收目标，不是已验证结论。
 
 ## 2. 测试前必须记录
@@ -55,6 +58,27 @@ FPS。
 
 目标：持续稳定 15 FPS。首轮建议连续 30 分钟；扩展稳定性测试 60--120
 分钟。团队需在正式验收前冻结允许的 P95 延迟、丢帧率、热状态和耗电阈值。
+
+### 5.1 导出字段口径（`schemaVersion` ≥ 3）
+
+从 schemaVersion 3 起，导出中的性能字段含义如下；旧导出的 `processedFps`
+与延迟字段不可信（无流水线时也计为"已处理"，延迟被钳位到 0）。
+
+-   `cameraFps`：CameraX 每秒送入分析器的帧数，**不等于**感知 FPS。
+-   `processedFrames` / `processedFps`：仅在存在活跃流水线并完成一次处理后计数。
+-   `skippedFrames`：帧到达调度器但没有活跃流水线，未被分析（模型未启用时的正常值）。
+-   `droppedFrames`：只统计 `FrameScheduler` 内部丢弃的帧。`STRATEGY_KEEP_ONLY_LATEST`
+    在分析器之前合并的帧不可见，**不能**用 0 推断"未丢帧"。
+-   `latencyP50Ms` / `latencyP95Ms` / `lastLatencyMs`：`latencySource` 为
+    `analyzer_ingress`，即"分析器入口 → 结果"，含帧转换与流水线耗时，**不含**相机传感器与
+    传输延迟。该时钟与进程内其他测量同源，不受相机时间戳基准影响。
+-   `sensorClockOffsetMs` / `sensorClockMismatch`：相机传感器时间戳与进程时钟的偏移；
+    `true` 表示二者基准不同，不能用传感器时间戳计算延迟。
+-   `clockAnomalies`：出现负延迟的样本数；非 0 说明时钟回跳，需要重测。
+-   `memory.appPssMb`：本进程 PSS；`memory.deviceUsedMb`：整机已用内存（含其他应用）。
+-   `analysis.width/height/rotationDegrees/format`：实际分析流尺寸、旋转与像素格式，用于
+    解释 `cameraFps` 上限；分辨率由 CameraX 默认值决定，未显式指定。
+-   `session.startedAtEpochMs` / `session.elapsedSeconds`：从第一帧采集开始计时。
 
 ## 6. 结果记录模板
 

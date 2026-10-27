@@ -27,6 +27,12 @@ class DiagnosticsReportBuilderTest {
                     appPssMb = 512,
                     deviceUsedMemoryMb = 7_656,
                     skippedFrames = 3,
+                    analysisWidth = 640,
+                    analysisHeight = 480,
+                    rotationDegrees = 90,
+                    analysisFormat = "YUV_420_888",
+                    sessionStartedAtEpochMs = 1_790_000_000_000L,
+                    sessionElapsedSeconds = 439.5,
                 ),
                 providerRequested = "NNAPI",
                 providerActual = "CPU",
@@ -53,6 +59,13 @@ class DiagnosticsReportBuilderTest {
         assertTrue(json.contains("\"schemaVersion\": 3"))
         assertTrue(json.contains("\"appPssMb\": 512"))
         assertTrue(json.contains("\"deviceUsedMb\": 7656"))
+        assertTrue(json.contains("\"latencySource\": \"analyzer_ingress\""))
+        assertTrue(json.contains("\"width\": 640"))
+        assertTrue(json.contains("\"rotationDegrees\": 90"))
+        assertTrue(json.contains("\"format\": \"YUV_420_888\""))
+        assertTrue(json.contains("\"session\": {"))
+        assertTrue(json.contains("\"elapsedSeconds\": 439.5"))
+        assertTrue(json.contains("\"sensorClockMismatch\": false"))
     }
 
     @Test

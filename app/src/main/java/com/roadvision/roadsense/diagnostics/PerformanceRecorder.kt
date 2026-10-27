@@ -63,16 +63,27 @@ class PerformanceRecorder(
     private val processedTimes = ArrayDeque<Long>()
     private val endToEndLatencies = ArrayDeque<Double>()
     private val inferenceLatencies = ArrayDeque<Double>()
-    private val startNs = clockNs()
-    private val startedAtEpochMs = wallClockMs()
-    private val mutableState = MutableStateFlow(DiagnosticsState(sessionStartedAtEpochMs = startedAtEpochMs))
+    private var startNs: Long? = null
+    private var startedAtEpochMs = 0L
+    private val mutableState = MutableStateFlow(DiagnosticsState())
     val state: StateFlow<DiagnosticsState> = mutableState.asStateFlow()
+
+    /**
+     * The session clock starts with the first analysed frame, not with recorder construction, so
+     * "elapsed" describes how long capture actually ran instead of how long the app was open.
+     */
+    private fun markStarted(now: Long) {
+        if (startNs != null) return
+        startNs = now
+        startedAtEpochMs = wallClockMs()
+    }
 
     @Synchronized
     fun onCaptured() {
         val now = clockNs()
         captured.incrementAndGet()
         captureTimes.addLast(now)
+        markStarted(now)
         publish(now, null)
     }
 
@@ -157,6 +168,8 @@ class PerformanceRecorder(
     private fun publish(now: Long, latencyMs: Double?, sensorOffsetMs: Double? = null) {
         trim(captureTimes, now)
         trim(processedTimes, now)
+        markStarted(now)
+        val startedNs = startNs ?: now
         mutableState.value = mutableState.value.copy(
             cameraFps = rate(captureTimes),
             processedFps = rate(processedTimes),
@@ -173,7 +186,8 @@ class PerformanceRecorder(
             sensorClockMismatch = (sensorOffsetMs ?: mutableState.value.sensorClockOffsetMs)
                 ?.let { abs(it) > SENSOR_CLOCK_MISMATCH_MS }
                 ?: false,
-            sessionElapsedSeconds = (now - startNs) / 1_000_000_000.0,
+            sessionStartedAtEpochMs = startedAtEpochMs,
+            sessionElapsedSeconds = (now - startedNs) / 1_000_000_000.0,
         )
     }
 

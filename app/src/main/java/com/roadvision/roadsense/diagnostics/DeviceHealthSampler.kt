@@ -14,7 +14,8 @@ class DeviceHealthSampler(context: Context) {
         val memory = ActivityManager.MemoryInfo().also(activity::getMemoryInfo)
         val deviceUsedMb = (memory.totalMem - memory.availMem) / (1024 * 1024)
         val process = Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }
-        val appPssMb = process.totalPss.toLong()
+        // Debug.MemoryInfo reports totalPss in KiB; the diagnostics state is in MiB.
+        val appPssMb = process.totalPss / 1024L
         val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) power.currentThermalStatus else null
         recorder.onDeviceHealth(deviceUsedMb, appPssMb, thermal)
     }
