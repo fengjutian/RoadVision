@@ -33,6 +33,14 @@ fun DiagnosticsPanel(status: CameraStatus, diagnostics: DiagnosticsState, modifi
             Metric("延迟", diagnostics.lastLatencyMs?.let { "${format(it)} ms" } ?: "—")
         }
         Text(
+            "E2E P50/P95 ${metric(diagnostics.latencyP50Ms)}/${metric(diagnostics.latencyP95Ms)} ms" +
+                " · 推理 ${diagnostics.executionProvider} ${metric(diagnostics.inferenceP50Ms)}/${metric(diagnostics.inferenceP95Ms)} ms" +
+                " · 内存 ${diagnostics.memoryMb} MB" +
+                (diagnostics.thermalStatus?.let { " · 热状态 $it" } ?: ""),
+            color = Color(0xFFCAD5D0),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
             "采集 ${diagnostics.capturedFrames}  ·  处理 ${diagnostics.processedFrames}  ·  丢弃 ${diagnostics.droppedFrames}",
             color = Color(0xFFCAD5D0),
             style = MaterialTheme.typography.bodySmall,
@@ -56,3 +64,4 @@ private fun statusText(status: CameraStatus): String = when (status) {
 }
 
 private fun format(value: Double): String = String.format(Locale.US, "%.1f", value)
+private fun metric(value: Double?): String = value?.let(::format) ?: "—"

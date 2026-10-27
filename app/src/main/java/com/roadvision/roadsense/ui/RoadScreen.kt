@@ -52,6 +52,8 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
         }
         val status by viewModel.cameraStatus.collectAsState()
         val diagnostics by viewModel.recorder.state.collectAsState()
+        val perception by viewModel.perception.collectAsState()
+        val events by viewModel.events.collectAsState()
 
         DisposableEffect(lifecycleOwner, context) {
             val observer = LifecycleEventObserver { _, event ->
@@ -80,7 +82,18 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
                     onRetry = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                 )
             }
-            DiagnosticsPanel(status, diagnostics, Modifier.align(Alignment.BottomCenter))
+            RoadOverlay(perception.vehicles, perception.lanes)
+            Column(Modifier.align(Alignment.BottomCenter).background(Color(0xD908110E))) {
+                PlateEventList(events, viewModel::deleteEvent, viewModel::deleteAllEvents)
+                DiagnosticsPanel(status, diagnostics)
+                if (!perception.modelsReady) {
+                    Text(
+                        "模型未启用：等待许可证审查通过的 ONNX 权重与模型卡",
+                        color = Color(0xFFFFC857),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
         }
     }
 }

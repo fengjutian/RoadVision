@@ -30,6 +30,10 @@ android {
     testOptions { unitTests.isReturnDefaultValues = true }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     val cameraXVersion = "1.4.1"
 

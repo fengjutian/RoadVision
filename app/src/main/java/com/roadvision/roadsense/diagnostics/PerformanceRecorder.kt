@@ -13,6 +13,13 @@ data class DiagnosticsState(
     val processedFrames: Long = 0,
     val droppedFrames: Long = 0,
     val lastLatencyMs: Double? = null,
+    val latencyP50Ms: Double? = null,
+    val latencyP95Ms: Double? = null,
+    val inferenceP50Ms: Double? = null,
+    val inferenceP95Ms: Double? = null,
+    val memoryMb: Long = 0,
+    val thermalStatus: Int? = null,
+    val executionProvider: String = "DISABLED",
 )
 
 class PerformanceRecorder(
@@ -24,6 +31,8 @@ class PerformanceRecorder(
     private val dropped = AtomicLong()
     private val captureTimes = ArrayDeque<Long>()
     private val processedTimes = ArrayDeque<Long>()
+    private val endToEndLatencies = ArrayDeque<Double>()
+    private val inferenceLatencies = ArrayDeque<Double>()
     private val mutableState = MutableStateFlow(DiagnosticsState())
     val state: StateFlow<DiagnosticsState> = mutableState.asStateFlow()
 
@@ -40,7 +49,24 @@ class PerformanceRecorder(
         val now = clockNs()
         processed.incrementAndGet()
         processedTimes.addLast(now)
-        publish(now, (now - frameTimestampNs).coerceAtLeast(0) / 1_000_000.0)
+        val latency = (now - frameTimestampNs).coerceAtLeast(0) / 1_000_000.0
+        addBounded(endToEndLatencies, latency)
+        publish(now, latency)
+    }
+
+    @Synchronized
+    fun onInference(durationNs: Long, provider: String) {
+        addBounded(inferenceLatencies, durationNs.coerceAtLeast(0) / 1_000_000.0)
+        mutableState.value = mutableState.value.copy(
+            inferenceP50Ms = percentile(inferenceLatencies, 0.50),
+            inferenceP95Ms = percentile(inferenceLatencies, 0.95),
+            executionProvider = provider,
+        )
+    }
+
+    @Synchronized
+    fun onDeviceHealth(memoryMb: Long, thermalStatus: Int?) {
+        mutableState.value = mutableState.value.copy(memoryMb = memoryMb, thermalStatus = thermalStatus)
     }
 
     @Synchronized
@@ -59,6 +85,13 @@ class PerformanceRecorder(
             processedFrames = processed.get(),
             droppedFrames = dropped.get(),
             lastLatencyMs = latencyMs ?: mutableState.value.lastLatencyMs,
+            latencyP50Ms = percentile(endToEndLatencies, 0.50),
+            latencyP95Ms = percentile(endToEndLatencies, 0.95),
+            inferenceP50Ms = mutableState.value.inferenceP50Ms,
+            inferenceP95Ms = mutableState.value.inferenceP95Ms,
+            memoryMb = mutableState.value.memoryMb,
+            thermalStatus = mutableState.value.thermalStatus,
+            executionProvider = mutableState.value.executionProvider,
         )
     }
 
@@ -70,5 +103,16 @@ class PerformanceRecorder(
         if (times.size < 2) return 0.0
         val elapsedSeconds = (times.last() - times.first()) / 1_000_000_000.0
         return if (elapsedSeconds > 0) (times.size - 1) / elapsedSeconds else 0.0
+    }
+
+    private fun addBounded(values: ArrayDeque<Double>, value: Double) {
+        values.addLast(value)
+        while (values.size > 600) values.removeFirst()
+    }
+
+    private fun percentile(values: ArrayDeque<Double>, quantile: Double): Double? {
+        if (values.isEmpty()) return null
+        val sorted = values.sorted()
+        return sorted[((sorted.size - 1) * quantile).toInt().coerceIn(sorted.indices)]
     }
 }
