@@ -47,7 +47,7 @@
 - UFLD 车道模型路径已打通但未启用：合同支持 `resize: "stretch"`（UFLD 用拉伸而非 letterbox），
   输出 `[1, cells+1, rows, lanes]` 由 `UfldLaneDecoder` 按行锚点解码。候选权重为 CULane
   ResNet18（代码 MIT，直链与契约见 `docs/DEPENDENCIES.md` 5.2），原始导出 165 MB 且含 aux
-  分割头，需裁剪 + 量化后才适合进 APK；
+  分割头，需裁剪 + 量化后才适合进 APK；接入手顺与进度记录在 `docs/LANE_MODEL_PLAN.md`；
 - 叠加层改为与 CameraX `PreviewView` 同一 Android 视图层级的 `RoadOverlayView`，避免 Compose Canvas
   被相机预览遮挡；已用临时常量输出模型在真机确认车辆框、Track ID 和置信度标签可见；
 - 横竖屏自适应布局：按窗口尺寸切换；横屏把诊断/事件放进右侧栏、相机画面占满左侧剩余区域，竖屏折叠为

@@ -76,6 +76,7 @@ CameraX
 -   [隐私与数据处理](docs/PRIVACY.md)
 -   [模型契约](docs/MODEL_CONTRACT.md)
 -   [车辆检测输入尺寸与预处理对比](docs/VEHICLE_PERFORMANCE.md)
+-   [车道模型接入计划](docs/LANE_MODEL_PLAN.md)
 -   [车牌识别方案（暂缓开发）](docs/PLATE_RECOGNITION_PLAN.md)
 
 ## 状态标记约定
