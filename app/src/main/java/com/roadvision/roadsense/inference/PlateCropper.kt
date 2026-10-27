@@ -29,7 +29,7 @@ class PlateCropper(
             val v = y.toFloat() / (outputHeight - 1).coerceAtLeast(1)
             for (x in 0 until outputWidth) {
                 val u = x.toFloat() / (outputWidth - 1).coerceAtLeast(1)
-                val source = bilinear(quad, u, v)
+                val source = project(quad, u, v)
                 sampleRgb(frame, source.x, source.y, output, (y * outputWidth + x) * 3)
             }
         }
@@ -43,14 +43,36 @@ class PlateCropper(
 
     private fun rejected(reason: String) = PlateCrop(ByteArray(0), 0, 0, 0.0, false, reason)
 
-    private fun bilinear(q: PlateQuad, u: Float, v: Float): ImagePoint {
-        val top = lerp(q.topLeft, q.topRight, u)
-        val bottom = lerp(q.bottomLeft, q.bottomRight, u)
-        return lerp(top, bottom, v)
+    /** Projective mapping from a unit rectangle to the supplied source quadrilateral. */
+    internal fun project(q: PlateQuad, u: Float, v: Float): ImagePoint {
+        val x0 = q.topLeft.x
+        val y0 = q.topLeft.y
+        val x1 = q.topRight.x
+        val y1 = q.topRight.y
+        val x2 = q.bottomRight.x
+        val y2 = q.bottomRight.y
+        val x3 = q.bottomLeft.x
+        val y3 = q.bottomLeft.y
+        val dx1 = x1 - x2
+        val dx2 = x3 - x2
+        val dy1 = y1 - y2
+        val dy2 = y3 - y2
+        val sx = x0 - x1 + x2 - x3
+        val sy = y0 - y1 + y2 - y3
+        val determinant = dx1 * dy2 - dx2 * dy1
+        val g = if (kotlin.math.abs(determinant) < 1e-8f) 0f else (sx * dy2 - dx2 * sy) / determinant
+        val h = if (kotlin.math.abs(determinant) < 1e-8f) 0f else (dx1 * sy - sx * dy1) / determinant
+        val a = x1 - x0 + g * x1
+        val b = x3 - x0 + h * x3
+        val d = y1 - y0 + g * y1
+        val e = y3 - y0 + h * y3
+        val denominator = g * u + h * v + 1f
+        require(kotlin.math.abs(denominator) > 1e-8f) { "Degenerate plate quadrilateral" }
+        return ImagePoint(
+            (a * u + b * v + x0) / denominator,
+            (d * u + e * v + y0) / denominator,
+        )
     }
-
-    private fun lerp(a: ImagePoint, b: ImagePoint, ratio: Float) =
-        ImagePoint(a.x + (b.x - a.x) * ratio, a.y + (b.y - a.y) * ratio)
 
     private fun distance(a: ImagePoint, b: ImagePoint): Float =
         kotlin.math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y))

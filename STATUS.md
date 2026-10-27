@@ -23,7 +23,7 @@
 - 车辆/车道叠加、事件列表，以及 E2E/推理 P50/P95、内存、热状态诊断字段。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 17 项单元测试，生成
+`BUILD SUCCESSFUL`，当前共有 21 项单元测试，生成
 `app/build/outputs/apk/debug/app-debug.apk`。APK 已包含 P2–P5 运行时代码，
 但不包含车辆、车道、车牌或 OCR 权重；在合法模型资产与模型卡就绪前，UI 明确保持模型禁用状态。
 

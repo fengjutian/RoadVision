@@ -20,6 +20,11 @@ data class LetterboxTransform(
         return NormalizedRect(left, top, right, bottom).clamp()
     }
 
+    fun modelToSource(point: LanePoint): LanePoint = LanePoint(
+        ((point.x * inputWidth - padX) / scaledWidth).coerceIn(0f, 1f),
+        ((point.y * inputHeight - padY) / scaledHeight).coerceIn(0f, 1f),
+    )
+
     fun sourceToModel(box: NormalizedRect): NormalizedRect = NormalizedRect(
         (box.left * scaledWidth + padX) / inputWidth,
         (box.top * scaledHeight + padY) / inputHeight,

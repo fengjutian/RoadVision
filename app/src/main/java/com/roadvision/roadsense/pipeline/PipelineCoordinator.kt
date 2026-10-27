@@ -25,6 +25,8 @@ data class FusedPerceptionResult(
     val vehicles: List<TrackedVehicle>,
     val lanes: LaneResult?,
     val plates: List<FusedOcrResult>,
+    val sourceWidth: Int,
+    val sourceHeight: Int,
 )
 
 data class PipelineSchedule(
@@ -56,12 +58,17 @@ class PipelineCoordinator(
     fun process(frame: ConvertedFrame) {
         val started = System.nanoTime()
         val vehicles = tracker.update(vehicleDetector.detect(frame), frame.timestampNs)
+            .filter { it.missedFrames == 0 }
         if (frame.frameId % schedule.laneEveryFrames == 0L) lastLane = laneDetector.detect(frame)
         val fusedPlates = if (frame.frameId % schedule.plateEveryFrames == 0L) {
             processPlates(frame, vehicles)
         } else emptyList()
         recorder.onInference(System.nanoTime() - started, providerName)
-        onResult(FusedPerceptionResult(frame.frameId, frame.timestampNs, vehicles, lastLane, fusedPlates))
+        onResult(
+            FusedPerceptionResult(
+                frame.frameId, frame.timestampNs, vehicles, lastLane, fusedPlates, frame.width, frame.height,
+            ),
+        )
     }
 
     private fun processPlates(frame: ConvertedFrame, vehicles: List<TrackedVehicle>): List<FusedOcrResult> {

@@ -46,6 +46,7 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
         }
         var permissionRequested by remember { mutableStateOf(false) }
+        var cameraRestartKey by remember { mutableStateOf(0) }
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             permissionRequested = true
             hasPermission = granted
@@ -73,7 +74,7 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
         Box(Modifier.fillMaxSize().background(Color(0xFF08110E))) {
             if (hasPermission) {
                 CameraPreview(
-                    controller = remember {
+                    controller = remember(cameraRestartKey) {
                         CameraController(viewModel.recorder, viewModel.scheduler, viewModel::updateCameraStatus)
                     },
                 )
@@ -83,10 +84,21 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
                     onRetry = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                 )
             }
-            RoadOverlay(perception.vehicles, perception.lanes)
+            RoadOverlay(
+                perception.vehicles,
+                perception.lanes,
+                perception.sourceWidth,
+                perception.sourceHeight,
+            )
             Column(Modifier.align(Alignment.BottomCenter).background(Color(0xD908110E))) {
                 PlateEventList(events, viewModel::deleteEvent, viewModel::deleteAllEvents)
                 DiagnosticsPanel(status, diagnostics)
+                if (status is CameraStatus.Error && hasPermission) {
+                    Button(
+                        onClick = { cameraRestartKey++ },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    ) { Text("重新启动相机") }
+                }
                 if (!perception.modelsReady) {
                     Text(
                         modelStatusText(modelState),

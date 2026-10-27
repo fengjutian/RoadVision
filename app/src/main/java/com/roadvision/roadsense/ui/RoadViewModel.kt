@@ -27,6 +27,8 @@ data class PerceptionUiState(
     val vehicles: List<TrackedVehicle> = emptyList(),
     val lanes: LaneResult? = null,
     val modelsReady: Boolean = false,
+    val sourceWidth: Int = 0,
+    val sourceHeight: Int = 0,
 )
 
 sealed interface ModelRuntimeState {
@@ -76,7 +78,9 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
                     config = config,
                     recorder = recorder,
                     onResult = { result ->
-                        mutablePerception.value = PerceptionUiState(result.vehicles, result.lanes, true)
+                        mutablePerception.value = PerceptionUiState(
+                            result.vehicles, result.lanes, true, result.sourceWidth, result.sourceHeight,
+                        )
                     },
                     onEvent = { event -> viewModelScope.launch { repository.add(event) } },
                 )

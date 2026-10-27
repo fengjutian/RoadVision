@@ -20,6 +20,7 @@ class OnnxLaneDetector(
             assetPath, provider, contract.input.name, prepared.shape, prepared.values, setOf(outputSpec.name),
         ).getValue(outputSpec.name)
         OutputValidator.validateShape(output.shape, outputSpec.shape, outputSpec.name)
-        return decoder.decode(output.values, frame.frameId, frame.timestampNs)
+        val decoded = decoder.decode(output.values, frame.frameId, frame.timestampNs)
+        return decoded.copy(lanes = decoded.lanes.map { lane -> lane.map(prepared.transform::modelToSource) })
     }
 }

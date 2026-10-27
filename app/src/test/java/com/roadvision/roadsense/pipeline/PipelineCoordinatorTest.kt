@@ -68,6 +68,7 @@ class PipelineCoordinatorTest {
         assertEquals(results[0].vehicles.single().trackId, results[1].vehicles.single().trackId)
         assertEquals(1, events.size)
         assertEquals("A12345", events.single().plateText)
+        assertEquals(100, results.last().sourceWidth)
     }
 
     private fun frame(id: Long, timestamp: Long) = ConvertedFrame(

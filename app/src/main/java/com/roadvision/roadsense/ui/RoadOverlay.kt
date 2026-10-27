@@ -14,21 +14,33 @@ import com.roadvision.roadsense.inference.LaneResult
 import com.roadvision.roadsense.tracking.TrackedVehicle
 
 @Composable
-fun RoadOverlay(vehicles: List<TrackedVehicle>, lanes: LaneResult?, modifier: Modifier = Modifier) {
+fun RoadOverlay(
+    vehicles: List<TrackedVehicle>,
+    lanes: LaneResult?,
+    sourceWidth: Int,
+    sourceHeight: Int,
+    modifier: Modifier = Modifier,
+) {
     Canvas(modifier.fillMaxSize()) {
+        if (sourceWidth <= 0 || sourceHeight <= 0) return@Canvas
+        val mapper = PreviewCoordinateMapper(sourceWidth, sourceHeight, size.width, size.height)
         lanes?.lanes?.forEach { lane ->
             lane.zipWithNext().forEach { (start, end) ->
+                val mappedStart = mapper.map(start.x, start.y)
+                val mappedEnd = mapper.map(end.x, end.y)
                 drawLine(
                     color = Color(0xFF39D98A),
-                    start = Offset(start.x * size.width, start.y * size.height),
-                    end = Offset(end.x * size.width, end.y * size.height),
+                    start = Offset(mappedStart.x, mappedStart.y),
+                    end = Offset(mappedEnd.x, mappedEnd.y),
                     strokeWidth = 5f,
                 )
             }
         }
         vehicles.forEach { vehicle ->
             val box = vehicle.detection.box
-            val rect = Rect(box.left * size.width, box.top * size.height, box.right * size.width, box.bottom * size.height)
+            val topLeft = mapper.map(box.left, box.top)
+            val bottomRight = mapper.map(box.right, box.bottom)
+            val rect = Rect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y)
             drawRect(Color(0xFFFFC857), rect.topLeft, rect.size, style = Stroke(width = 4f))
             drawIntoCanvas { canvas ->
                 val paint = android.graphics.Paint().apply {

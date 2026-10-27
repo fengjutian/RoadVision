@@ -22,6 +22,14 @@ class InferenceContractTest {
     }
 
     @Test
+    fun mapsLetterboxPointBackToSource() {
+        val mapper = LetterboxTransform(1920, 1080, 640, 640)
+        val sourceCenter = mapper.modelToSource(LanePoint(0.5f, 0.5f))
+        assertEquals(0.5f, sourceCenter.x, 0.001f)
+        assertEquals(0.5f, sourceCenter.y, 0.001f)
+    }
+
+    @Test
     fun vehicleDecoderAppliesThresholdAndNms() {
         val decoder = VehicleOutputDecoder(mapOf(0 to "car"), 0.5f, 0.4f)
         val result = decoder.decode(
