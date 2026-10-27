@@ -21,6 +21,7 @@ fun DiagnosticsPanel(
     status: CameraStatus,
     diagnostics: DiagnosticsState,
     modelState: ModelRuntimeState,
+    vehicleCount: Int,
     modifier: Modifier = Modifier,
 ) {
     val running = modelState as? ModelRuntimeState.Running
@@ -65,7 +66,7 @@ fun DiagnosticsPanel(
         )
         Text(
             "分析尺寸 ${diagnostics.analysisWidth}×${diagnostics.analysisHeight} · 旋转 ${diagnostics.rotationDegrees}°" +
-                " · 丢弃 ${diagnostics.droppedFrames} · 错误 ${diagnostics.errors}",
+                " · 检测 $vehicleCount · 丢弃 ${diagnostics.droppedFrames} · 错误 ${diagnostics.errors}",
             color = Color(0xFFCAD5D0),
             style = MaterialTheme.typography.bodySmall,
         )

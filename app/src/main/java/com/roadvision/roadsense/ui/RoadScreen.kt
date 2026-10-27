@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +46,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.roadvision.roadsense.camera.CameraController
 import com.roadvision.roadsense.camera.CameraStatus
 import com.roadvision.roadsense.diagnostics.ReportExporter
+import com.roadvision.roadsense.inference.LaneResult
+import com.roadvision.roadsense.tracking.TrackedVehicle
 
 @Composable
 fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
@@ -118,17 +121,15 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
                 else -> CameraPreview(
                     controller = viewModel.cameraController,
                     onReady = viewModel::startCaptureService,
+                    vehicles = perception.vehicles,
+                    lanes = perception.lanes,
+                    sourceWidth = perception.sourceWidth,
+                    sourceHeight = perception.sourceHeight,
                 )
             }
-            RoadOverlay(
-                perception.vehicles,
-                perception.lanes,
-                perception.sourceWidth,
-                perception.sourceHeight,
-            )
             Column(Modifier.align(Alignment.BottomCenter).background(Color(0xD908110E))) {
                 PlateEventList(events, viewModel::deleteEvent, viewModel::deleteAllEvents)
-                DiagnosticsPanel(status, diagnostics, modelState)
+                DiagnosticsPanel(status, diagnostics, modelState, perception.vehicles.size)
                 if (status is CameraStatus.Error && hasPermission && captureEnabled) {
                     Button(
                         onClick = viewModel::restartCapture,
@@ -183,7 +184,14 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
 }
 
 @Composable
-private fun CameraPreview(controller: CameraController, onReady: () -> Unit) {
+private fun CameraPreview(
+    controller: CameraController,
+    onReady: () -> Unit,
+    vehicles: List<TrackedVehicle>,
+    lanes: LaneResult?,
+    sourceWidth: Int,
+    sourceHeight: Int,
+) {
     val context = LocalContext.current
     val previewView = remember {
         PreviewView(context).apply {
@@ -191,7 +199,24 @@ private fun CameraPreview(controller: CameraController, onReady: () -> Unit) {
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
     }
-    AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+    val overlayView = remember { RoadOverlayView(context) }
+    val container = remember {
+        FrameLayout(context).apply {
+            addView(
+                previewView,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
+            )
+            addView(
+                overlayView,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
+            )
+        }
+    }
+    AndroidView(
+        factory = { container },
+        modifier = Modifier.fillMaxSize(),
+        update = { overlayView.update(vehicles, lanes, sourceWidth, sourceHeight) },
+    )
     DisposableEffect(controller, previewView) {
         controller.setSurfaceProvider(previewView.surfaceProvider)
         onReady()
