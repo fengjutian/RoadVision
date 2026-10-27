@@ -1,11 +1,16 @@
 package com.roadvision.roadsense.ui
 
 import android.app.Application
+import android.content.Intent
 import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.roadvision.roadsense.camera.CameraController
 import com.roadvision.roadsense.camera.CameraStatus
 import com.roadvision.roadsense.camera.ConvertedFrame
+import com.roadvision.roadsense.capture.CaptureBridge
+import com.roadvision.roadsense.capture.CaptureService
 import com.roadvision.roadsense.data.AppDatabase
 import com.roadvision.roadsense.data.DetectionEventEntity
 import com.roadvision.roadsense.data.DetectionRepository
@@ -74,11 +79,43 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
         onDropped = recorder::onDropped,
         processor = ::processFrame,
     )
+    val cameraController = CameraController(recorder, scheduler, ::updateCameraStatus)
 
     init {
+        CaptureBridge.controller = cameraController
         configureModels()
         viewModelScope.launch {
             repository.enforceRetention(Duration.ofDays(mutableSettings.value.retentionDays.toLong()))
+        }
+    }
+
+    fun startCaptureService() {
+        if (!mutableCaptureEnabled.value) return
+        val context = getApplication<Application>()
+        runCatching {
+            ContextCompat.startForegroundService(context, Intent(context, CaptureService::class.java))
+        }.onFailure { error ->
+            recorder.onError()
+            mutableCameraStatus.value = CameraStatus.Error(error.message ?: "前台采集服务启动失败")
+        }
+    }
+
+    fun stopCaptureService() {
+        val context = getApplication<Application>()
+        runCatching { context.stopService(Intent(context, CaptureService::class.java)) }
+        cameraController.stop()
+    }
+
+    fun restartCapture() {
+        val context = getApplication<Application>()
+        runCatching {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, CaptureService::class.java).setAction(CaptureService.ACTION_RESTART),
+            )
+        }.onFailure { error ->
+            recorder.onError()
+            mutableCameraStatus.value = CameraStatus.Error(error.message ?: "相机重启失败")
         }
     }
 
@@ -145,6 +182,7 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
     fun setCaptureEnabled(enabled: Boolean) {
         mutableCaptureEnabled.value = enabled
         if (!enabled) {
+            stopCaptureService()
             mutablePerception.value = mutablePerception.value.copy(
                 vehicles = emptyList(),
                 lanes = null,
@@ -257,6 +295,9 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        stopCaptureService()
+        CaptureBridge.controller = null
+        cameraController.close()
         scheduler.close()
         synchronized(pipelineLock) {
             activePipeline?.close()

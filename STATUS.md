@@ -29,10 +29,12 @@
 - XNNPACK/NNAPI 初始化失败自动回退 CPU，Session 在开始采集前预加载并失败即停；
 - 诊断面板增加错误计数；设置页支持停止/开始采集、保留期、Provider、阈值和模型信息；
 - 诊断报告导出（JSON，含设备/构建/模型 SHA-256/性能/事件），通过 FileProvider 分享；
-- 保持屏幕常亮开关，避免 30 分钟测试因系统熄屏中断。
+- 保持屏幕常亮开关，避免 30 分钟测试因系统熄屏中断；
+- 前台 `CaptureService` 持有 CameraX 生命周期，Activity 停止或熄屏后继续采集，通知栏可返回应用；
+  UI 只负责挂载预览 surface，不再直接绑定相机。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 46 项单元测试，生成
+`BUILD SUCCESSFUL`，当前共有 48 项单元测试，生成
 `app/build/outputs/apk/debug/app-debug.apk`。APK 已包含 P2–P5 运行时代码，
 但不包含车辆、车道、车牌或 OCR 权重；在合法模型资产与模型卡就绪前，UI 明确保持模型禁用状态。
 
@@ -48,8 +50,8 @@ CameraX + YOLO ONNX + ONNX Runtime；闭源商业用途。
 建立真机性能基准；当前无 RoadVision 真机 FPS 实测结果。 6.
 冻结测试视频/数据集与准确率验收阈值。
 
-**仍未实现的能力：** 熄屏后台采集需要把 CameraX 所有权迁到前台服务（含 Android 14
-`camera` 类型、通知权限和 MagicOS 电源策略），当前仅提供前台常亮与手动停止采集；
-固定视频上的跟踪/关联准确率评估、真实模型下的静态图基准和 P6 真机测试也尚未执行。
+**仍需真机验证：** 熄屏采集依赖前台 `camera` 类型服务，通知权限、Android 14/15
+前台服务限制和 MagicOS 电源策略必须在目标荣耀机型上实测；当前没有真机结果。
+固定视频上的跟踪/关联准确率评估、真实模型下的静态图基准和 P6 长稳/场景测试也尚未执行。
 
 文档中所有模型、版本、性能和准确率未被明确标记为实测的内容，均不可对外宣称为已验证事实。

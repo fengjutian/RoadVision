@@ -51,13 +51,16 @@ RoadVision/
 │       ├── java/<package>/roadsense/
 │       │   ├── ui/
 │       │   │   ├── RoadScreen.kt
-│       │   │   ├── RoadOverlayView.kt
+│       │   │   ├── RoadOverlay.kt
+│       │   │   ├── SettingsSheet.kt
 │       │   │   ├── PlateEventList.kt
 │       │   │   └── DiagnosticsPanel.kt
 │       │   ├── camera/
 │       │   │   ├── CameraController.kt
-│       │   │   ├── FrameConverter.kt
-│       │   │   └── CameraForegroundService.kt
+│       │   │   └── FrameConverter.kt
+│       │   ├── capture/
+│       │   │   ├── CaptureService.kt
+│       │   │   └── CaptureBridge.kt
 │       │   ├── inference/
 │       │   │   ├── OrtRuntimeManager.kt
 │       │   │   ├── ModelContract.kt
@@ -165,10 +168,11 @@ FPS，先建立测量再优化。可采用分层调度：车辆检测为主、�
 
 ## 7. 生命周期与熄屏运行
 
-首阶段优先验证亮屏运行；是否要求熄屏连续运行需在测试设备确定后明确。若实现后台/熄屏采集，必须按目标
-Android 版本核验 Camera
-前台服务类型、运行时权限、通知和系统限制。用户需主动启动并可随时停止。荣耀
-MagicOS 的电源管理行为必须真机验证，不可承诺一定不被系统终止。
+首阶段优先验证亮屏运行；熄屏连续运行当前由 `capture/CaptureService.kt` 以前台 `camera`
+类型服务持有 CameraX 生命周期实现：Activity/预览停止后 `ImageAnalysis` 继续送入
+`FrameScheduler`，通知栏常驻提示，用户在设置页可随时停止。必须按目标 Android 版本核验
+Camera 前台服务类型、运行时权限、通知和系统限制；荣耀 MagicOS 的电源管理行为必须真机
+验证，不可承诺一定不被系统终止。
 
 ## 8. 存储与隐私
 

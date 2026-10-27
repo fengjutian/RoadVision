@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,7 +27,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,11 +56,14 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
         }
         var permissionRequested by remember { mutableStateOf(false) }
-        var cameraRestartKey by remember { mutableIntStateOf(0) }
+        var notificationRequested by remember { mutableStateOf(false) }
         var showSettings by remember { mutableStateOf(false) }
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             permissionRequested = true
             hasPermission = granted
+        }
+        val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            notificationRequested = true
         }
         val status by viewModel.cameraStatus.collectAsState()
         val diagnostics by viewModel.recorder.state.collectAsState()
@@ -90,6 +93,20 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
         }
 
+        LaunchedEffect(hasPermission, notificationRequested) {
+            if (hasPermission && !notificationRequested && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationRequested = true
+                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        LaunchedEffect(hasPermission, captureEnabled) {
+            if (!hasPermission || !captureEnabled) viewModel.stopCaptureService()
+        }
+
         Box(Modifier.fillMaxSize().background(Color(0xFF08110E))) {
             when {
                 !hasPermission -> PermissionMessage(
@@ -99,9 +116,8 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
                 )
                 !captureEnabled -> PausedMessage(onResume = { viewModel.setCaptureEnabled(true) })
                 else -> CameraPreview(
-                    controller = remember(cameraRestartKey) {
-                        CameraController(viewModel.recorder, viewModel.scheduler, viewModel::updateCameraStatus)
-                    },
+                    controller = viewModel.cameraController,
+                    onReady = viewModel::startCaptureService,
                 )
             }
             RoadOverlay(
@@ -115,7 +131,7 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
                 DiagnosticsPanel(status, diagnostics)
                 if (status is CameraStatus.Error && hasPermission && captureEnabled) {
                     Button(
-                        onClick = { cameraRestartKey++ },
+                        onClick = viewModel::restartCapture,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     ) { Text("重新启动相机") }
                 }
@@ -174,9 +190,8 @@ private fun modelStatusText(state: ModelRuntimeState): String = when (state) {
 }
 
 @Composable
-private fun CameraPreview(controller: CameraController) {
+private fun CameraPreview(controller: CameraController, onReady: () -> Unit) {
     val context = LocalContext.current
-    val owner = LocalLifecycleOwner.current
     val previewView = remember {
         PreviewView(context).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -184,9 +199,10 @@ private fun CameraPreview(controller: CameraController) {
         }
     }
     AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-    DisposableEffect(controller, owner, previewView) {
-        controller.start(context, owner, previewView)
-        onDispose { controller.close() }
+    DisposableEffect(controller, previewView) {
+        controller.setSurfaceProvider(previewView.surfaceProvider)
+        onReady()
+        onDispose { controller.setSurfaceProvider(null) }
     }
 }
 
