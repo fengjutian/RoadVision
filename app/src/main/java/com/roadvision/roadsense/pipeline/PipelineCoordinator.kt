@@ -38,9 +38,9 @@ data class PipelineSchedule(
 
 class PipelineCoordinator(
     private val vehicleDetector: VehicleDetector,
-    private val laneDetector: LaneDetector,
-    private val plateDetector: PlateDetector,
-    private val recognizer: PlateRecognizer,
+    private val laneDetector: LaneDetector? = null,
+    private val plateDetector: PlateDetector? = null,
+    private val recognizer: PlateRecognizer? = null,
     private val recorder: PerformanceRecorder,
     private val providerName: String,
     private val schedule: PipelineSchedule = PipelineSchedule(),
@@ -55,19 +55,36 @@ class PipelineCoordinator(
     private var lastLane: LaneResult? = null
     private val persistedTracks = mutableSetOf<Long>()
 
+    init {
+        require((plateDetector == null) == (recognizer == null)) {
+            "Plate detector and OCR recognizer must be enabled together"
+        }
+    }
+
     fun process(frame: ConvertedFrame) {
         val started = System.nanoTime()
         val tracked = tracker.update(vehicleDetector.detect(frame), frame.timestampNs)
         val activeTrackIds = tracked.mapTo(mutableSetOf()) { it.trackId }
-        ocrScheduler.prune(activeTrackIds)
-        ocrFusion.prune(activeTrackIds)
-        matcher.prune(activeTrackIds)
-        persistedTracks.retainAll(activeTrackIds)
+        val currentPlateDetector = plateDetector
+        val currentRecognizer = recognizer
+        if (currentPlateDetector != null && currentRecognizer != null) {
+            ocrScheduler.prune(activeTrackIds)
+            ocrFusion.prune(activeTrackIds)
+            matcher.prune(activeTrackIds)
+            persistedTracks.retainAll(activeTrackIds)
+        }
         val vehicles = tracked.filter { it.missedFrames == 0 }
-        if (frame.frameId % schedule.laneEveryFrames == 0L) lastLane = laneDetector.detect(frame)
-        val fusedPlates = if (frame.frameId % schedule.plateEveryFrames == 0L) {
-            processPlates(frame, vehicles)
-        } else emptyList()
+        laneDetector?.let { detector ->
+            if (frame.frameId % schedule.laneEveryFrames == 0L) lastLane = detector.detect(frame)
+        }
+        val fusedPlates = if (
+            currentPlateDetector != null && currentRecognizer != null &&
+            frame.frameId % schedule.plateEveryFrames == 0L
+        ) {
+            processPlates(frame, vehicles, currentPlateDetector, currentRecognizer)
+        } else {
+            emptyList()
+        }
         recorder.onInference(System.nanoTime() - started, providerName)
         onResult(
             FusedPerceptionResult(
@@ -76,7 +93,12 @@ class PipelineCoordinator(
         )
     }
 
-    private fun processPlates(frame: ConvertedFrame, vehicles: List<TrackedVehicle>): List<FusedOcrResult> {
+    private fun processPlates(
+        frame: ConvertedFrame,
+        vehicles: List<TrackedVehicle>,
+        plateDetector: PlateDetector,
+        recognizer: PlateRecognizer,
+    ): List<FusedOcrResult> {
         val detections = plateDetector.detect(frame)
         val candidates = detections.map { PlateCandidate(it.box, it.confidence, it.timestampNs) }
         val matches = matcher.match(candidates, vehicles).associateBy { it.plate }

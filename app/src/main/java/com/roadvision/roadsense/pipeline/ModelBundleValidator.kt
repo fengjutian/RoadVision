@@ -6,8 +6,10 @@ import com.roadvision.roadsense.inference.TensorSpec
 /**
  * Validates a model bundle before any ONNX session is created.
  *
- * The decoders rely on specific output layouts (rows of six values, a single-channel mask,
- * or CTC logits including the blank class). Catching a mismatch here turns a hard-to-diagnose
+ * Vehicle detection is mandatory; lane and plate+OCR are optional so the vehicle path can be
+ * integrated first. Optional sections that are present are validated just as strictly as the
+ * mandatory one. The decoders rely on specific output layouts (rows of six values, a single-channel
+ * mask, or CTC logits including the blank class); catching a mismatch here turns a hard-to-diagnose
  * runtime failure into an actionable configuration error.
  */
 object ModelBundleValidator {
@@ -16,36 +18,24 @@ object ModelBundleValidator {
     fun validate(config: PipelineModelConfig) {
         // Decode configs validate their own ranges in their init blocks.
         require(config.vehicleDecode.maxDetections in 1..1_000)
-        require(config.plateDecode.maxDetections in 1..1_000)
         require(config.vehicleLabels.all { (classId, label) -> classId >= 0 && label.isNotBlank() }) {
             "Vehicle labels must use non-negative class ids and non-blank names"
         }
 
         validateAsset("vehicle", config.vehicle)
-        validateAsset("lane", config.lane)
-        validateAsset("plate", config.plate)
-        validateAsset("ocr", config.ocr)
+        validateDetectionOutput("vehicle", config.vehicle)
 
-        val vehicleOutput = singleOutput("vehicle", config.vehicle)
-        require(vehicleOutput.shape.size == 3 && vehicleOutput.shape.last() == 6L) {
-            "Vehicle output must be [1, N, 6], got ${vehicleOutput.shape.contentToString()}"
+        config.lane?.let { lane ->
+            validateAsset("lane", lane.asset)
+            validateLaneOutput("lane", lane.asset)
         }
 
-        val plateOutput = singleOutput("plate", config.plate)
-        require(plateOutput.shape.size == 3 && plateOutput.shape.last() == 6L) {
-            "Plate output must be [1, N, 6], got ${plateOutput.shape.contentToString()}"
-        }
-
-        val laneOutput = singleOutput("lane", config.lane)
-        require(laneOutput.shape.size == 4 && laneOutput.shape[1] == 1L) {
-            "Lane mask must be [1, 1, H, W], got ${laneOutput.shape.contentToString()}"
-        }
-
-        val ocrOutput = singleOutput("ocr", config.ocr)
-        val classes = config.ocrAlphabet.size + 1L
-        require(ocrOutput.shape.size == 3 && ocrOutput.shape.last() == classes) {
-            "OCR logits must be [1, T, $classes] for ${config.ocrAlphabet.size} characters plus blank, " +
-                "got ${ocrOutput.shape.contentToString()}"
+        config.plateOcr?.let { plateOcr ->
+            require(plateOcr.plateDecode.maxDetections in 1..1_000)
+            validateAsset("plate", plateOcr.plate)
+            validateAsset("ocr", plateOcr.ocr)
+            validateDetectionOutput("plate", plateOcr.plate)
+            validateOcrOutput("ocr", plateOcr.ocr, plateOcr.alphabet.size)
         }
     }
 
@@ -68,6 +58,29 @@ object ModelBundleValidator {
         }
         require(input.shape[channelIndex] == 3L) {
             "$role ${asset.contract.layout} input must have 3 channels, got ${input.shape.contentToString()}"
+        }
+    }
+
+    private fun validateDetectionOutput(role: String, asset: ModelAssetConfig) {
+        val output = singleOutput(role, asset)
+        require(output.shape.size == 3 && output.shape.last() == 6L) {
+            "${role.replaceFirstChar { it.uppercase() }} output must be [1, N, 6], got ${output.shape.contentToString()}"
+        }
+    }
+
+    private fun validateLaneOutput(role: String, asset: ModelAssetConfig) {
+        val output = singleOutput(role, asset)
+        require(output.shape.size == 4 && output.shape[1] == 1L) {
+            "Lane mask must be [1, 1, H, W], got ${output.shape.contentToString()}"
+        }
+    }
+
+    private fun validateOcrOutput(role: String, asset: ModelAssetConfig, alphabetSize: Int) {
+        val output = singleOutput(role, asset)
+        val classes = alphabetSize + 1L
+        require(output.shape.size == 3 && output.shape.last() == classes) {
+            "OCR logits must be [1, T, $classes] for $alphabetSize characters plus blank, " +
+                "got ${output.shape.contentToString()}"
         }
     }
 

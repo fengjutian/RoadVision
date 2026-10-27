@@ -3,6 +3,7 @@ package com.roadvision.roadsense.diagnostics
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
+import android.os.Debug
 import android.os.PowerManager
 
 class DeviceHealthSampler(context: Context) {
@@ -11,8 +12,10 @@ class DeviceHealthSampler(context: Context) {
 
     fun sample(recorder: PerformanceRecorder) {
         val memory = ActivityManager.MemoryInfo().also(activity::getMemoryInfo)
-        val usedMb = (memory.totalMem - memory.availMem) / (1024 * 1024)
+        val deviceUsedMb = (memory.totalMem - memory.availMem) / (1024 * 1024)
+        val process = Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }
+        val appPssMb = process.totalPss.toLong()
         val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) power.currentThermalStatus else null
-        recorder.onDeviceHealth(usedMb, thermal)
+        recorder.onDeviceHealth(deviceUsedMb, appPssMb, thermal)
     }
 }

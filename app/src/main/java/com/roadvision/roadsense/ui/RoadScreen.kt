@@ -128,7 +128,7 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             )
             Column(Modifier.align(Alignment.BottomCenter).background(Color(0xD908110E))) {
                 PlateEventList(events, viewModel::deleteEvent, viewModel::deleteAllEvents)
-                DiagnosticsPanel(status, diagnostics)
+                DiagnosticsPanel(status, diagnostics, modelState)
                 if (status is CameraStatus.Error && hasPermission && captureEnabled) {
                     Button(
                         onClick = viewModel::restartCapture,
@@ -180,13 +180,6 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
             )
         }
     }
-}
-
-private fun modelStatusText(state: ModelRuntimeState): String = when (state) {
-    ModelRuntimeState.NotConfigured -> "模型未配置：等待已批准权重与 models/model-bundle.json"
-    ModelRuntimeState.Loading -> "正在校验并加载模型…"
-    is ModelRuntimeState.Running -> "模型运行中：${state.provider}" + if (state.fallbackToCpu) "（已回退 CPU）" else ""
-    is ModelRuntimeState.Failed -> "模型不可用：${state.message}"
 }
 
 @Composable

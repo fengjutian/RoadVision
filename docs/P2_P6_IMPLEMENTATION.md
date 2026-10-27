@@ -23,22 +23,27 @@
 | 车辆模型适配 | READY_FOR_ASSET | 支持 `[1,N,6]` 检测输出的阈值与 NMS；具体模型需填模型卡 |
 | 车道模型适配 | READY_FOR_ASSET | 支持二值概率掩码解码；具体输出必须与模型卡一致 |
 | CPU/XNNPACK/NNAPI | DEVICE_REQUIRED | 三种配置入口已提供；必须逐一记录成功率、回退和真机数据 |
-| 性能统计 | IMPLEMENTED | 处理 FPS、E2E P50/P95、推理 P50/P95、进程内存、热状态和错误计数 |
+| 性能统计 | IMPLEMENTED | 采集 FPS、分析 FPS、跳过帧、E2E P50/P95、推理 P50/P95、进程内存、热状态和错误计数；没有活跃流水线时不把帧计为已处理 |
 
 仓库不包含 ONNX 权重。将模型放入 APK 前，必须在
 [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md) 中将状态更新为 `APPROVED`，填写 SHA-256，
 并使运行时契约与模型真实输入输出完全一致。
 
-模型批准后，由 `PipelineFactory` 统一激活四个资产。工厂会在创建任何 Session 前验证全部
-SHA-256；任何一个资产失败都会终止整条流水线，不允许部分模型静默运行。
+模型批准后，由 `PipelineFactory` 激活清单中声明的资产。`vehicle` 必填；`lane` 与
+`plate`+`ocr` 可整段省略，用于在其余权重尚未就绪时先验证车辆检测链路。清单声明的资产仍全部
+校验 SHA-256 并在开始采集前创建 Session；任一资产失败都会终止整条流水线，不允许声明了却缺失
+的模型静默运行。
 
 配置方式：复制 `app/src/main/assets/models/model-bundle.json.example` 为
 `model-bundle.json`，逐项替换经过审查的路径、64 位 SHA-256、张量名称/形状、标签、OCR
-字符集及 blank 索引。车辆/车牌可增加 `decode` 块配置 `confidence`、`nmsIou`、
-`maxDetections`，车道可配置 `decode.threshold`；未填写时使用代码默认值。应用启动后在后台
-解析并校验；缺少清单时保持 `NotConfigured`，加载或推理失败时清除旧叠加并显示错误，可由
-用户手动重试。清单结构错误（路径越界、维度不匹配、输出通道与字母表不一致）会在创建任何
-Session 前直接失败，并显示具体原因。设置页的覆盖值只保存在本机偏好设置中，不修改资产清单。
+字符集及 blank 索引。只有车辆模型时，使用
+`app/src/main/assets/models/model-bundle.vehicle-only.json.example` 作为模板；该清单只包含
+`vehicle` 段，启动后 UI 显示“仅车辆检测”的降级状态。车辆/车牌可增加 `decode` 块配置
+`confidence`、`nmsIou`、`maxDetections`，车道可配置 `decode.threshold`；未填写时使用代码默认值。
+应用启动后在后台解析并校验；缺少清单时保持 `NotConfigured`，加载或推理失败时清除旧叠加并显示
+错误，可由用户手动重试。清单结构错误（路径越界、维度不匹配、输出通道与字母表不一致、`plate`
+与 `ocr` 只填一个）会在创建任何 Session 前直接失败，并显示具体原因。设置页的覆盖值只保存在本机
+偏好设置中，不修改资产清单。
 
 ## 3. P3：车辆跟踪与叠加
 
@@ -71,7 +76,8 @@ Session 前直接失败，并显示具体原因。设置页的覆盖值只保存
 - 设置页可显式导出 JSON 诊断报告：设备/系统构建、App 版本、模型 ID/版本/SHA-256、Provider、
   FPS/P50/P95/丢帧/错误/内存/热状态和本地事件。报告只写入应用缓存并经 FileProvider 分享，
   不产生网络请求；报告包含事件中的完整车牌文本，需按隐私要求保管。
-- UI 明确显示模型未启用状态，模型或相机错误不能用旧结果伪装实时结果。
+- UI 明确显示模型未启用或降级状态：未配置时显示仅采集，缺少车道/车牌时显示“仅车辆检测”，
+  模型或相机错误不能用旧结果伪装实时结果。
 - 相机错误可由用户显式重启，权限被永久拒绝时可跳转应用设置；模型失败会清空叠加并提供重新加载入口。
 - 采集由前台 `CaptureService` 持有 CameraX；Activity 只挂预览 surface，熄屏/退到后台后
   `ImageAnalysis` 继续送入 `FrameScheduler`，通知栏常驻“正在采集”，停止采集会同时停止服务。

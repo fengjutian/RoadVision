@@ -21,7 +21,13 @@ class DiagnosticsReportBuilderTest {
                     buildDisplay = "BUILD-1",
                     socModel = "SoC-X",
                 ),
-                diagnostics = DiagnosticsState(cameraFps = 14.5, errors = 2, memoryMb = 512),
+                diagnostics = DiagnosticsState(
+                    cameraFps = 14.5,
+                    errors = 2,
+                    appPssMb = 512,
+                    deviceUsedMemoryMb = 7_656,
+                    skippedFrames = 3,
+                ),
                 providerRequested = "NNAPI",
                 providerActual = "CPU",
                 fallbackToCpu = true,
@@ -43,6 +49,10 @@ class DiagnosticsReportBuilderTest {
         assertTrue(json.contains("\"role\": \"vehicle\""))
         assertTrue(json.contains("\"plateText\": \"A\\\"1\\n2\""))
         assertTrue(json.contains("\"errors\": 2"))
+        assertTrue(json.contains("\"skippedFrames\": 3"))
+        assertTrue(json.contains("\"schemaVersion\": 3"))
+        assertTrue(json.contains("\"appPssMb\": 512"))
+        assertTrue(json.contains("\"deviceUsedMb\": 7656"))
     }
 
     @Test

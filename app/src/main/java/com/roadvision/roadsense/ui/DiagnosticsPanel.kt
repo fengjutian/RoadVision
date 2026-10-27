@@ -17,7 +17,13 @@ import com.roadvision.roadsense.diagnostics.DiagnosticsState
 import java.util.Locale
 
 @Composable
-fun DiagnosticsPanel(status: CameraStatus, diagnostics: DiagnosticsState, modifier: Modifier = Modifier) {
+fun DiagnosticsPanel(
+    status: CameraStatus,
+    diagnostics: DiagnosticsState,
+    modelState: ModelRuntimeState,
+    modifier: Modifier = Modifier,
+) {
+    val running = modelState as? ModelRuntimeState.Running
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -25,29 +31,77 @@ fun DiagnosticsPanel(status: CameraStatus, diagnostics: DiagnosticsState, modifi
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("RoadVision · P1 采集基线", color = Color(0xFF39D98A), style = MaterialTheme.typography.titleMedium)
+        Text(panelTitle(running), color = Color(0xFF39D98A), style = MaterialTheme.typography.titleMedium)
         Text(statusText(status), color = if (status is CameraStatus.Error) Color(0xFFFF6B6B) else Color.White)
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             Metric("采集 FPS", format(diagnostics.cameraFps))
-            Metric("处理 FPS", format(diagnostics.processedFps))
-            Metric("延迟", diagnostics.lastLatencyMs?.let { "${format(it)} ms" } ?: "—")
+            Metric("分析 FPS", running?.let { format(diagnostics.processedFps) } ?: "—")
+            Metric(
+                "延迟",
+                if (running == null) {
+                    "—"
+                } else {
+                    diagnostics.lastLatencyMs?.let { "${format(it)} ms" } ?: "—"
+                },
+            )
+        }
+        val e2e = if (running == null) {
+            "—/—"
+        } else {
+            "${metric(diagnostics.latencyP50Ms)}/${metric(diagnostics.latencyP95Ms)}"
         }
         Text(
-            "E2E P50/P95 ${metric(diagnostics.latencyP50Ms)}/${metric(diagnostics.latencyP95Ms)} ms" +
-                " · 推理 ${diagnostics.executionProvider} ${metric(diagnostics.inferenceP50Ms)}/${metric(diagnostics.inferenceP95Ms)} ms" +
-                " · 内存 ${diagnostics.memoryMb} MB" +
+            "延迟 P50/P95 $e2e ms" +
+                " · 推理 " + inferenceText(running, diagnostics) +
+                " · 内存 应用 ${diagnostics.appPssMb} MB / 整机 ${diagnostics.deviceUsedMemoryMb} MB" +
                 (diagnostics.thermalStatus?.let { " · 热状态 $it" } ?: ""),
             color = Color(0xFFCAD5D0),
             style = MaterialTheme.typography.bodySmall,
         )
         Text(
-            "采集 ${diagnostics.capturedFrames}  ·  处理 ${diagnostics.processedFrames}  ·  丢弃 ${diagnostics.droppedFrames}" +
-                "  ·  错误 ${diagnostics.errors}",
+            "采集 ${diagnostics.capturedFrames} · 分析 ${diagnostics.processedFrames} · 跳过 ${diagnostics.skippedFrames}",
             color = Color(0xFFCAD5D0),
             style = MaterialTheme.typography.bodySmall,
         )
+        Text(
+            "分析尺寸 ${diagnostics.analysisWidth}×${diagnostics.analysisHeight} · 旋转 ${diagnostics.rotationDegrees}°" +
+                " · 丢弃 ${diagnostics.droppedFrames} · 错误 ${diagnostics.errors}",
+            color = Color(0xFFCAD5D0),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (running == null) {
+            Text(
+                "推理未启用：当前只采集，不产生检测结果",
+                color = Color(0xFFFFC857),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            val missing = missingOptionalModelRoles(running.enabledModels)
+            if (missing.isNotEmpty()) {
+                Text(
+                    "降级模式：已启用 ${enabledModelsLabel(running.enabledModels)}；未启用 " +
+                        missing.joinToString("、") { modelRoleLabel(it) },
+                    color = Color(0xFFFFC857),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
+
+private fun panelTitle(running: ModelRuntimeState.Running?): String = when {
+    running == null -> "RoadVision · 采集基线"
+    missingOptionalModelRoles(running.enabledModels).isEmpty() -> "RoadVision · 实时感知"
+    running.enabledModels == listOf("vehicle") -> "RoadVision · 车辆检测"
+    else -> "RoadVision · 道路感知"
+}
+
+private fun inferenceText(running: ModelRuntimeState.Running?, diagnostics: DiagnosticsState): String =
+    if (running == null) {
+        "未启用 —/— ms"
+    } else {
+        "${running.provider} ${metric(diagnostics.inferenceP50Ms)}/${metric(diagnostics.inferenceP95Ms)} ms"
+    }
 
 @Composable
 private fun Metric(label: String, value: String) {

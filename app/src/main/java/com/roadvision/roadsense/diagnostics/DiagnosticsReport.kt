@@ -27,6 +27,7 @@ data class ModelRuntimeInfo(
     val vehicleConfidence: Float,
     val plateConfidence: Float,
     val laneThreshold: Float,
+    val enabledModels: List<String> = models.map { it.role },
 )
 
 data class ReportSnapshot(
@@ -50,7 +51,7 @@ data class ReportSnapshot(
 object DiagnosticsReportBuilder {
     fun build(snapshot: ReportSnapshot): String = buildString {
         append("{\n")
-        append("  \"schemaVersion\": 1,\n")
+        append("  \"schemaVersion\": 3,\n")
         append("  \"generatedAtEpochMs\": ${snapshot.generatedAtEpochMs},\n")
         append("  \"app\": {\n")
         append("    \"versionName\": ${quote(snapshot.appVersionName)},\n")
@@ -71,6 +72,10 @@ object DiagnosticsReportBuilder {
         append("    \"fallbackToCpu\": ${snapshot.fallbackToCpu}\n")
         append("  },\n")
         append("  \"retentionDays\": ${snapshot.retentionDays},\n")
+        append("  \"session\": {\n")
+        append("    \"startedAtEpochMs\": ${snapshot.diagnostics.sessionStartedAtEpochMs},\n")
+        append("    \"elapsedSeconds\": ${snapshot.diagnostics.sessionElapsedSeconds}\n")
+        append("  },\n")
         appendDiagnostics(snapshot.diagnostics)
         append(",\n")
         appendModels(snapshot.models)
@@ -85,14 +90,28 @@ object DiagnosticsReportBuilder {
         append("    \"processedFps\": ${state.processedFps},\n")
         append("    \"capturedFrames\": ${state.capturedFrames},\n")
         append("    \"processedFrames\": ${state.processedFrames},\n")
+        append("    \"skippedFrames\": ${state.skippedFrames},\n")
         append("    \"droppedFrames\": ${state.droppedFrames},\n")
         append("    \"errors\": ${state.errors},\n")
+        append("    \"latencySource\": ${quote(state.latencySource)},\n")
         append("    \"lastLatencyMs\": ${state.lastLatencyMs ?: "null"},\n")
         append("    \"latencyP50Ms\": ${state.latencyP50Ms ?: "null"},\n")
         append("    \"latencyP95Ms\": ${state.latencyP95Ms ?: "null"},\n")
+        append("    \"clockAnomalies\": ${state.clockAnomalies},\n")
+        append("    \"sensorClockOffsetMs\": ${state.sensorClockOffsetMs ?: "null"},\n")
+        append("    \"sensorClockMismatch\": ${state.sensorClockMismatch},\n")
         append("    \"inferenceP50Ms\": ${state.inferenceP50Ms ?: "null"},\n")
         append("    \"inferenceP95Ms\": ${state.inferenceP95Ms ?: "null"},\n")
-        append("    \"memoryMb\": ${state.memoryMb},\n")
+        append("    \"analysis\": {\n")
+        append("      \"width\": ${state.analysisWidth},\n")
+        append("      \"height\": ${state.analysisHeight},\n")
+        append("      \"rotationDegrees\": ${state.rotationDegrees},\n")
+        append("      \"format\": ${quote(state.analysisFormat)}\n")
+        append("    },\n")
+        append("    \"memory\": {\n")
+        append("      \"deviceUsedMb\": ${state.deviceUsedMemoryMb},\n")
+        append("      \"appPssMb\": ${state.appPssMb}\n")
+        append("    },\n")
         append("    \"thermalStatus\": ${state.thermalStatus ?: "null"},\n")
         append("    \"executionProvider\": ${quote(state.executionProvider)}\n")
         append("  }")

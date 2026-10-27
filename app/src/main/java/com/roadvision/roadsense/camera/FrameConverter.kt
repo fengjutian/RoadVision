@@ -10,11 +10,22 @@ data class ConvertedFrame(
     val rotationDegrees: Int,
     /** Packed RGB bytes in display orientation. */
     val rgb: ByteArray,
+    /**
+     * `System.nanoTime()` at the moment CameraX handed the frame to our analyzer. Unlike
+     * [timestampNs] (the camera sensor timestamp, whose clock base is platform specific) this value
+     * is guaranteed to share the clock of every other in-process measurement, so it is what the
+     * end-to-end latency is derived from.
+     */
+    val ingressNs: Long = timestampNs,
 )
 
 /** Converts YUV_420_888 frames without retaining CameraX-owned buffers. */
 object FrameConverter {
-    fun convert(image: ImageProxy, frameId: Long): ConvertedFrame {
+    /**
+     * @param ingressNs the analyzer ingress timestamp to carry on the frame; defaults to the clock
+     *   reading taken before the conversion work starts, so conversion time is included in latency.
+     */
+    fun convert(image: ImageProxy, frameId: Long, ingressNs: Long = System.nanoTime()): ConvertedFrame {
         require(image.planes.size == 3) { "Expected YUV_420_888 with three planes" }
         val sourceWidth = image.width
         val sourceHeight = image.height
@@ -47,6 +58,7 @@ object FrameConverter {
             height = if (swapsDimensions) sourceWidth else sourceHeight,
             rotationDegrees = normalizedRotation,
             rgb = rotated,
+            ingressNs = ingressNs,
         )
     }
 

@@ -9,11 +9,15 @@ object SettingsOverrides {
         vehicleDecode = settings.vehicleConfidence?.let {
             base.vehicleDecode.copy(confidenceThreshold = it)
         } ?: base.vehicleDecode,
-        plateDecode = settings.plateConfidence?.let {
-            base.plateDecode.copy(confidenceThreshold = it)
-        } ?: base.plateDecode,
-        laneDecode = settings.laneThreshold?.let {
-            base.laneDecode.copy(threshold = it)
-        } ?: base.laneDecode,
+        lane = base.lane?.let { lane ->
+            settings.laneThreshold?.let {
+                lane.copy(decode = lane.decode.copy(threshold = it))
+            } ?: lane
+        },
+        plateOcr = base.plateOcr?.let { plateOcr ->
+            settings.plateConfidence?.let {
+                plateOcr.copy(plateDecode = plateOcr.plateDecode.copy(confidenceThreshold = it))
+            } ?: plateOcr
+        },
     )
 }

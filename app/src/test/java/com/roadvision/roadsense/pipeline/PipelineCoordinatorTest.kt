@@ -20,6 +20,8 @@ import com.roadvision.roadsense.inference.VehicleDetector
 import com.roadvision.roadsense.tracking.OcrTemporalFusion
 import com.roadvision.roadsense.tracking.PlateVehicleMatcher
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PipelineCoordinatorTest {
@@ -115,6 +117,33 @@ class PipelineCoordinatorTest {
 
         coordinator.process(frame(3, 2_000_000_000L))
         assertEquals(1, events.size)
+    }
+
+    @Test
+    fun vehicleOnlyPipelineProducesDetectionsWithoutOptionalModels() {
+        val results = mutableListOf<FusedPerceptionResult>()
+        val recorder = PerformanceRecorder()
+        val coordinator = PipelineCoordinator(
+            vehicleDetector = object : VehicleDetector {
+                override val contract = this@PipelineCoordinatorTest.contract
+                override fun detect(frame: ConvertedFrame) = listOf(
+                    Detection(0, "car", 0.9f, NormalizedRect(0f, 0f, 1f, 1f), frame.frameId, frame.timestampNs),
+                )
+            },
+            recorder = recorder,
+            providerName = "TEST",
+            onResult = results::add,
+            onEvent = {},
+        )
+
+        coordinator.process(frame(1, 1_000_000_000L))
+
+        val result = results.single()
+        assertEquals(1, result.vehicles.size)
+        assertNull(result.lanes)
+        assertTrue(result.plates.isEmpty())
+        assertEquals(100, result.sourceWidth)
+        assertTrue(recorder.state.value.inferenceP50Ms != null)
     }
 
     private fun frame(id: Long, timestamp: Long) = ConvertedFrame(

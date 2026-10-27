@@ -55,6 +55,7 @@ fun SettingsSheet(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF0E1A15),
     ) {
+        val enabledRoles = modelInfo?.models?.map { it.role }?.toSet()
         Column(
             Modifier
                 .fillMaxWidth()
@@ -74,7 +75,7 @@ fun SettingsSheet(
                 }
                 SwitchRow("保持屏幕常亮", settings.keepScreenOn, onKeepScreenOn)
                 Text(
-                    "熄屏后台采集尚未实现：需要把 CameraX 所有权迁到前台服务。当前通过常亮保障 30 分钟测试。",
+                    "熄屏后台采集由前台服务持有 CameraX；通知权限和系统省电策略需要真机验证。",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF9EACA6),
                 )
@@ -120,16 +121,24 @@ fun SettingsSheet(
                     settings.vehicleConfidence ?: modelInfo?.vehicleConfidence ?: 0.4f,
                     onVehicleConfidence,
                 )
-                ThresholdRow(
-                    "车牌置信度",
-                    settings.plateConfidence ?: modelInfo?.plateConfidence ?: 0.5f,
-                    onPlateConfidence,
-                )
-                ThresholdRow(
-                    "车道概率",
-                    settings.laneThreshold ?: modelInfo?.laneThreshold ?: 0.5f,
-                    onLaneThreshold,
-                )
+                if (enabledRoles == null || "plate" in enabledRoles) {
+                    ThresholdRow(
+                        "车牌置信度",
+                        settings.plateConfidence ?: modelInfo?.plateConfidence ?: 0.5f,
+                        onPlateConfidence,
+                    )
+                } else {
+                    Text("车牌置信度：未启用（未配置车牌/OCR 模型）", color = Color(0xFF9EACA6))
+                }
+                if (enabledRoles == null || "lane" in enabledRoles) {
+                    ThresholdRow(
+                        "车道概率",
+                        settings.laneThreshold ?: modelInfo?.laneThreshold ?: 0.5f,
+                        onLaneThreshold,
+                    )
+                } else {
+                    Text("车道概率：未启用（未配置车道模型）", color = Color(0xFF9EACA6))
+                }
                 Text(
                     "修改后会重新加载模型；阈值必须与模型卡一致，默认值来自 model-bundle.json。",
                     style = MaterialTheme.typography.bodySmall,
@@ -139,9 +148,17 @@ fun SettingsSheet(
 
             Section("模型") {
                 if (modelInfo == null) {
-                    Text(modelStateText(modelState), color = Color(0xFFFFC857))
+                    Text(modelStatusText(modelState), color = Color(0xFFFFC857))
                 } else {
                     modelInfo.models.forEach { ModelRow(it) }
+                    val missing = missingOptionalModelRoles(modelInfo.enabledModels)
+                    if (missing.isNotEmpty()) {
+                        Text(
+                            "未启用：${missing.joinToString("、") { modelRoleLabel(it) }}（仅车辆降级模式）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFFC857),
+                        )
+                    }
                 }
             }
 
@@ -205,7 +222,7 @@ private fun ThresholdRow(label: String, initial: Float, onChangeFinished: (Float
 private fun ModelRow(model: ModelDescriptor) {
     Column(Modifier.fillMaxWidth()) {
         Row {
-            Text(roleLabel(model.role), color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(modelRoleLabel(model.role), color = Color.White, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(10.dp))
             Text("${model.id} · ${model.version}", color = Color(0xFFCAD5D0))
         }
@@ -217,23 +234,8 @@ private fun ModelRow(model: ModelDescriptor) {
     }
 }
 
-private fun roleLabel(role: String): String = when (role) {
-    "vehicle" -> "车辆检测"
-    "lane" -> "车道识别"
-    "plate" -> "车牌检测"
-    "ocr" -> "车牌 OCR"
-    else -> role
-}
-
 private fun providerStatus(info: ModelRuntimeInfo?, state: ModelRuntimeState): String = when {
-    info == null -> modelStateText(state)
+    info == null -> modelStatusText(state)
     info.fallbackToCpu -> "当前 ${info.actualProvider}（请求 ${info.requestedProvider}，已回退 CPU）"
     else -> "当前 ${info.actualProvider}（请求 ${info.requestedProvider}）"
-}
-
-private fun modelStateText(state: ModelRuntimeState): String = when (state) {
-    ModelRuntimeState.NotConfigured -> "模型未配置：等待已批准权重与 models/model-bundle.json"
-    ModelRuntimeState.Loading -> "正在校验并加载模型…"
-    is ModelRuntimeState.Running -> "模型运行中：${state.provider}"
-    is ModelRuntimeState.Failed -> "模型不可用：${state.message}"
 }

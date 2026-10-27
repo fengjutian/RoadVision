@@ -3,15 +3,23 @@ package com.roadvision.roadsense.inference
 import android.content.Context
 import com.roadvision.roadsense.pipeline.DetectionDecodeConfig
 import com.roadvision.roadsense.pipeline.LaneDecodeConfig
+import com.roadvision.roadsense.pipeline.LaneModelConfig
 import com.roadvision.roadsense.pipeline.ModelAssetConfig
 import com.roadvision.roadsense.pipeline.ModelBundleValidator
 import com.roadvision.roadsense.pipeline.PipelineModelConfig
 import com.roadvision.roadsense.pipeline.PipelineSchedule
+import com.roadvision.roadsense.pipeline.PlateOcrModelConfig
 import org.json.JSONArray
 import org.json.JSONObject
 
 object ModelBundleConfigLoader {
     const val DEFAULT_MANIFEST = "models/model-bundle.json"
+
+    private val DEFAULT_PLATE_DECODE = DetectionDecodeConfig(
+        confidenceThreshold = 0.5f,
+        nmsIouThreshold = 0.4f,
+        maxDetections = 50,
+    )
 
     fun exists(context: Context, assetPath: String = DEFAULT_MANIFEST): Boolean = runCatching {
         context.assets.open(assetPath).close()
@@ -21,26 +29,37 @@ object ModelBundleConfigLoader {
         val root = context.assets.open(assetPath).bufferedReader().use { JSONObject(it.readText()) }
         val provider = ExecutionProvider.valueOf(root.optString("provider", "CPU").uppercase())
         val vehicle = root.getJSONObject("vehicle")
-        val lane = root.getJSONObject("lane")
-        val plate = root.getJSONObject("plate")
-        val ocr = root.getJSONObject("ocr")
+        val lane = root.optJSONObject("lane")?.let { json ->
+            LaneModelConfig(
+                asset = asset(json),
+                decode = LaneDecodeConfig(
+                    laneDecodeThreshold(json.optJSONObject("decode")),
+                ),
+            )
+        }
+        val plateJson = root.optJSONObject("plate")
+        val ocrJson = root.optJSONObject("ocr")
+        require((plateJson == null) == (ocrJson == null)) {
+            "plate and ocr must be configured together in $assetPath"
+        }
+        val plateOcr = if (plateJson != null && ocrJson != null) {
+            PlateOcrModelConfig(
+                plate = asset(plateJson),
+                ocr = asset(ocrJson),
+                alphabet = ocrJson.getJSONArray("alphabet").strings().map { it.single() },
+                blankIndex = ocrJson.getInt("blankIndex"),
+                plateDecode = detectionDecode(plateJson.optJSONObject("decode"), DEFAULT_PLATE_DECODE),
+            )
+        } else {
+            null
+        }
         val config = PipelineModelConfig(
             vehicle = asset(vehicle),
             vehicleLabels = stringMap(vehicle.getJSONObject("labels")),
-            lane = asset(lane),
-            plate = asset(plate),
-            ocr = asset(ocr),
-            ocrAlphabet = ocr.getJSONArray("alphabet").strings().map { it.single() },
-            ocrBlankIndex = ocr.getInt("blankIndex"),
+            lane = lane,
+            plateOcr = plateOcr,
             provider = provider,
             vehicleDecode = detectionDecode(vehicle.optJSONObject("decode"), DetectionDecodeConfig()),
-            plateDecode = detectionDecode(
-                plate.optJSONObject("decode"),
-                DetectionDecodeConfig(confidenceThreshold = 0.5f, nmsIouThreshold = 0.4f, maxDetections = 50),
-            ),
-            laneDecode = LaneDecodeConfig(
-                lane.optJSONObject("decode")?.optDouble("threshold", 0.5)?.toFloat() ?: 0.5f,
-            ),
             schedule = root.optJSONObject("schedule")?.let {
                 PipelineSchedule(it.optInt("laneEveryFrames", 3), it.optInt("plateEveryFrames", 3))
             } ?: PipelineSchedule(),
@@ -48,6 +67,9 @@ object ModelBundleConfigLoader {
         ModelBundleValidator.validate(config)
         return config
     }
+
+    private fun laneDecodeThreshold(json: JSONObject?): Float =
+        json?.optDouble("threshold", 0.5)?.toFloat() ?: 0.5f
 
     private fun detectionDecode(json: JSONObject?, default: DetectionDecodeConfig): DetectionDecodeConfig {
         if (json == null) return default
@@ -85,7 +107,7 @@ object ModelBundleConfigLoader {
     }
 
     private fun JSONArray.objects() = (0 until length()).map(::getJSONObject)
-    private fun JSONArray.strings() = (0 until length()).map(::getString)
+    private fun JSONArray.strings() = (0 until length()).map { getString(it) }
     private fun JSONArray.longArray() = LongArray(length()) { getLong(it) }
     private fun JSONArray.floatArray() = FloatArray(length()) { getDouble(it).toFloat() }
 }

@@ -76,10 +76,13 @@ class CameraController(
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                     .build()
+                recorder.onAnalysisFormat(ANALYSIS_FORMAT)
                 analysis.setAnalyzer(analyzerExecutor) { image ->
+                    // Stamp before the conversion: this clock reading is the latency origin.
+                    val ingressNs = System.nanoTime()
                     recorder.onCaptured()
                     try {
-                        scheduler.submit(FrameConverter.convert(image, frameIds.incrementAndGet()))
+                        scheduler.submit(FrameConverter.convert(image, frameIds.incrementAndGet(), ingressNs))
                     } catch (error: Throwable) {
                         recorder.onError()
                         onStatus(CameraStatus.Error(error.message ?: "帧转换失败"))
@@ -112,5 +115,13 @@ class CameraController(
         lastContext = null
         lastOwner = null
         analyzerExecutor.shutdownNow()
+    }
+
+    companion object {
+        /**
+         * Analysis output format. Resolution is deliberately left to CameraX defaults; the actual
+         * size and rotation are reported in the diagnostics export instead of being assumed.
+         */
+        const val ANALYSIS_FORMAT = "YUV_420_888"
     }
 }

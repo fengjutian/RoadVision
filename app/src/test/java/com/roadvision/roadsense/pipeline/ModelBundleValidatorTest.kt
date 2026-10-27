@@ -20,6 +20,16 @@ class ModelBundleValidatorTest {
     }
 
     @Test
+    fun acceptsVehicleOnlyBundle() {
+        ModelBundleValidator.validate(bundle(includeLane = false, includePlateOcr = false))
+    }
+
+    @Test
+    fun acceptsVehicleAndLaneBundle() {
+        ModelBundleValidator.validate(bundle(includePlateOcr = false))
+    }
+
+    @Test
     fun rejectsAssetOutsideModelsDirectory() {
         val error = assertThrows(IllegalArgumentException::class.java) {
             ModelBundleValidator.validate(bundle(vehiclePath = "assets/../secret.onnx"))
@@ -74,23 +84,37 @@ class ModelBundleValidatorTest {
         laneOutput: LongArray = longArrayOf(1, 1, 288, 800),
         ocrOutput: LongArray = longArrayOf(1, -1, 3),
         layout: TensorLayout = TensorLayout.NCHW,
+        includeLane: Boolean = true,
+        includePlateOcr: Boolean = true,
     ) = PipelineModelConfig(
         vehicle = ModelAssetConfig(vehiclePath, contract(vehicleInput ?: inputShape(layout), vehicleOutput, layout)),
         vehicleLabels = mapOf(0 to "car", 1 to "bus"),
-        lane = ModelAssetConfig(
-            "models/lane/model.onnx",
-            contract(inputShape(layout), laneOutput, layout),
-        ),
-        plate = ModelAssetConfig(
-            "models/plate/model.onnx",
-            contract(inputShape(layout), longArrayOf(1, -1, 6), layout),
-        ),
-        ocr = ModelAssetConfig(
-            "models/ocr/model.onnx",
-            contract(inputShape(layout), ocrOutput, layout),
-        ),
-        ocrAlphabet = listOf('A', 'B'),
-        ocrBlankIndex = 2,
+        lane = if (includeLane) {
+            LaneModelConfig(
+                ModelAssetConfig(
+                    "models/lane/model.onnx",
+                    contract(inputShape(layout), laneOutput, layout),
+                ),
+            )
+        } else {
+            null
+        },
+        plateOcr = if (includePlateOcr) {
+            PlateOcrModelConfig(
+                plate = ModelAssetConfig(
+                    "models/plate/model.onnx",
+                    contract(inputShape(layout), longArrayOf(1, -1, 6), layout),
+                ),
+                ocr = ModelAssetConfig(
+                    "models/ocr/model.onnx",
+                    contract(inputShape(layout), ocrOutput, layout),
+                ),
+                alphabet = listOf('A', 'B'),
+                blankIndex = 2,
+            )
+        } else {
+            null
+        },
     )
 
     private fun inputShape(layout: TensorLayout) = when (layout) {

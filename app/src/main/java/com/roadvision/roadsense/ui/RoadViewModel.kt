@@ -48,7 +48,11 @@ data class PerceptionUiState(
 sealed interface ModelRuntimeState {
     data object NotConfigured : ModelRuntimeState
     data object Loading : ModelRuntimeState
-    data class Running(val provider: String, val fallbackToCpu: Boolean = false) : ModelRuntimeState
+    data class Running(
+        val provider: String,
+        val fallbackToCpu: Boolean = false,
+        val enabledModels: List<String> = listOf("vehicle", "lane", "plate", "ocr"),
+    ) : ModelRuntimeState
     data class Failed(val message: String) : ModelRuntimeState
 }
 
@@ -154,10 +158,15 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
                     fallbackToCpu = pipeline.fallbackToCpu,
                     models = describeModels(config),
                     vehicleConfidence = config.vehicleDecode.confidenceThreshold,
-                    plateConfidence = config.plateDecode.confidenceThreshold,
-                    laneThreshold = config.laneDecode.threshold,
+                    plateConfidence = config.plateOcr?.plateDecode?.confidenceThreshold ?: 0.5f,
+                    laneThreshold = config.lane?.decode?.threshold ?: 0.5f,
+                    enabledModels = pipeline.enabledModels,
                 )
-                mutableModelState.value = ModelRuntimeState.Running(pipeline.provider.name, pipeline.fallbackToCpu)
+                mutableModelState.value = ModelRuntimeState.Running(
+                    pipeline.provider.name,
+                    pipeline.fallbackToCpu,
+                    pipeline.enabledModels,
+                )
             }.onFailure { error ->
                 if (generation != modelGeneration) return@onFailure
                 synchronized(pipelineLock) {
@@ -270,27 +279,47 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun describeModels(config: PipelineModelConfig): List<ModelDescriptor> = listOf(
-        ModelDescriptor("vehicle", config.vehicle.contract.id, config.vehicle.contract.version, config.vehicle.contract.sha256),
-        ModelDescriptor("lane", config.lane.contract.id, config.lane.contract.version, config.lane.contract.sha256),
-        ModelDescriptor("plate", config.plate.contract.id, config.plate.contract.version, config.plate.contract.sha256),
-        ModelDescriptor("ocr", config.ocr.contract.id, config.ocr.contract.version, config.ocr.contract.sha256),
-    )
+    private fun describeModels(config: PipelineModelConfig): List<ModelDescriptor> = buildList {
+        add(ModelDescriptor("vehicle", config.vehicle.contract.id, config.vehicle.contract.version, config.vehicle.contract.sha256))
+        config.lane?.let {
+            add(ModelDescriptor("lane", it.asset.contract.id, it.asset.contract.version, it.asset.contract.sha256))
+        }
+        config.plateOcr?.let {
+            add(ModelDescriptor("plate", it.plate.contract.id, it.plate.contract.version, it.plate.contract.sha256))
+            add(ModelDescriptor("ocr", it.ocr.contract.id, it.ocr.contract.version, it.ocr.contract.sha256))
+        }
+    }
 
     private fun processFrame(frame: ConvertedFrame) {
         check(frame.rgb.size == frame.width * frame.height * 3)
+        recorder.onFrameGeometry(frame.width, frame.height, frame.rotationDegrees)
+        val pipeline = synchronized(pipelineLock) { activePipeline }
+        if (pipeline == null) {
+            recorder.onSkipped()
+            sampleHealth(frame)
+            return
+        }
         try {
-            synchronized(pipelineLock) { activePipeline?.process(frame) }
+            pipeline.process(frame)
+            recorder.onProcessed(frame.ingressNs, frame.timestampNs)
         } catch (error: Throwable) {
             val failed = synchronized(pipelineLock) {
-                activePipeline.also { activePipeline = null }
+                if (activePipeline === pipeline) {
+                    activePipeline = null
+                    pipeline
+                } else {
+                    null
+                }
             }
             failed?.close()
             recorder.onError()
             mutablePerception.value = PerceptionUiState()
             mutableModelState.value = ModelRuntimeState.Failed(error.message ?: "模型推理失败")
         }
-        recorder.onProcessed(frame.timestampNs)
+        sampleHealth(frame)
+    }
+
+    private fun sampleHealth(frame: ConvertedFrame) {
         if (frame.frameId % 30L == 0L) healthSampler.sample(recorder)
     }
 

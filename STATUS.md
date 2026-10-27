@@ -31,12 +31,18 @@
 - 诊断报告导出（JSON，含设备/构建/模型 SHA-256/性能/事件），通过 FileProvider 分享；
 - 保持屏幕常亮开关，避免 30 分钟测试因系统熄屏中断；
 - 前台 `CaptureService` 持有 CameraX 生命周期，Activity 停止或熄屏后继续采集，通知栏可返回应用；
-  UI 只负责挂载预览 surface，不再直接绑定相机。
+  UI 只负责挂载预览 surface，不再直接绑定相机；
+- 车辆-only 降级模式：清单中 `vehicle` 必填，`lane` 与 `plate`+`ocr` 可整段省略；省略的能力不加载、
+  不产生结果，UI 明确显示降级模式；
+- 诊断口径区分采集、分析、跳过：没有活跃流水线时帧只计为跳过，不再计为已处理，分析 FPS 和延迟显示
+  “—”，并显示“推理未启用”。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 48 项单元测试，生成
+`BUILD SUCCESSFUL`，当前共有 54 项单元测试，生成
 `app/build/outputs/apk/debug/app-debug.apk`。APK 已包含 P2–P5 运行时代码，
 但不包含车辆、车道、车牌或 OCR 权重；在合法模型资产与模型卡就绪前，UI 明确保持模型禁用状态。
+车辆-only 模板见 `app/src/main/assets/models/model-bundle.vehicle-only.json.example`，
+用于在其余权重未就绪时先验证车辆检测链路。
 
 **已确定的项目决定：** 项目名
 RoadVision；默认本地处理，未来允许用户主动上传；首版车辆检测、车道识别、跟踪、车牌
