@@ -29,6 +29,11 @@
 模型批准后，由 `PipelineFactory` 统一激活四个资产。工厂会在创建任何 Session 前验证全部
 SHA-256；任何一个资产失败都会终止整条流水线，不允许部分模型静默运行。
 
+配置方式：复制 `app/src/main/assets/models/model-bundle.json.example` 为
+`model-bundle.json`，逐项替换经过审查的路径、64 位 SHA-256、张量名称/形状、标签、OCR
+字符集及 blank 索引。应用启动后在后台解析并校验；缺少清单时保持 `NotConfigured`，加载或
+推理失败时清除旧叠加并显示错误，可由用户手动重试。
+
 ## 3. P3：车辆跟踪与叠加
 
 `VehicleTracker` 使用类别一致性和 IoU 关联，时间戳必须单调。轨迹允许短时丢帧，超过

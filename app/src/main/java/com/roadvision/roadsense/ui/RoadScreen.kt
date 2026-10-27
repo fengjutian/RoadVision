@@ -54,6 +54,7 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
         val diagnostics by viewModel.recorder.state.collectAsState()
         val perception by viewModel.perception.collectAsState()
         val events by viewModel.events.collectAsState()
+        val modelState by viewModel.modelState.collectAsState()
 
         DisposableEffect(lifecycleOwner, context) {
             val observer = LifecycleEventObserver { _, event ->
@@ -88,14 +89,27 @@ fun RoadScreen(viewModel: RoadViewModel = viewModel()) {
                 DiagnosticsPanel(status, diagnostics)
                 if (!perception.modelsReady) {
                     Text(
-                        "模型未启用：等待许可证审查通过的 ONNX 权重与模型卡",
+                        modelStatusText(modelState),
                         color = Color(0xFFFFC857),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     )
+                    if (modelState is ModelRuntimeState.Failed) {
+                        Button(
+                            onClick = viewModel::configureModels,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        ) { Text("重新加载模型") }
+                    }
                 }
             }
         }
     }
+}
+
+private fun modelStatusText(state: ModelRuntimeState): String = when (state) {
+    ModelRuntimeState.NotConfigured -> "模型未配置：等待已批准权重与 models/model-bundle.json"
+    ModelRuntimeState.Loading -> "正在校验并加载模型…"
+    is ModelRuntimeState.Running -> "模型运行中：${state.provider}"
+    is ModelRuntimeState.Failed -> "模型不可用：${state.message}"
 }
 
 @Composable
