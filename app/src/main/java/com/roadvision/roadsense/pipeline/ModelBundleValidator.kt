@@ -14,6 +14,9 @@ object ModelBundleValidator {
     private const val ASSET_PREFIX = "models/"
 
     fun validate(config: PipelineModelConfig) {
+        // Decode configs validate their own ranges in their init blocks.
+        require(config.vehicleDecode.maxDetections in 1..1_000)
+        require(config.plateDecode.maxDetections in 1..1_000)
         require(config.vehicleLabels.all { (classId, label) -> classId >= 0 && label.isNotBlank() }) {
             "Vehicle labels must use non-negative class ids and non-blank names"
         }

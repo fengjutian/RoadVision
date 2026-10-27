@@ -18,6 +18,7 @@ import com.roadvision.roadsense.inference.TensorLayout
 import com.roadvision.roadsense.inference.TensorSpec
 import com.roadvision.roadsense.inference.VehicleDetector
 import com.roadvision.roadsense.tracking.OcrTemporalFusion
+import com.roadvision.roadsense.tracking.PlateVehicleMatcher
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -70,6 +71,50 @@ class PipelineCoordinatorTest {
         assertEquals(1, events.size)
         assertEquals("A12345", events.single().plateText)
         assertEquals(100, results.last().sourceWidth)
+    }
+
+    @Test
+    fun doesNotPersistEventBeforeAssociationIsConfirmed() {
+        val events = mutableListOf<DetectionEventEntity>()
+        val coordinator = PipelineCoordinator(
+            vehicleDetector = object : VehicleDetector {
+                override val contract = this@PipelineCoordinatorTest.contract
+                override fun detect(frame: ConvertedFrame) = listOf(
+                    Detection(0, "car", 0.9f, NormalizedRect(0f, 0f, 1f, 1f), frame.frameId, frame.timestampNs),
+                )
+            },
+            laneDetector = object : LaneDetector {
+                override val contract = this@PipelineCoordinatorTest.contract
+                override fun detect(frame: ConvertedFrame) = LaneResult(
+                    listOf(listOf(LanePoint(0f, 0f), LanePoint(1f, 1f))), 0.9f, frame.frameId, frame.timestampNs,
+                )
+            },
+            plateDetector = object : PlateDetector {
+                override val contract = this@PipelineCoordinatorTest.contract
+                override fun detect(frame: ConvertedFrame) = listOf(
+                    Detection(0, "plate", 0.9f, NormalizedRect(0.2f, 0.6f, 0.8f, 0.8f), frame.frameId, frame.timestampNs),
+                )
+            },
+            recognizer = object : PlateRecognizer {
+                override val contract = this@PipelineCoordinatorTest.contract
+                override fun recognize(rgb: ByteArray, width: Int, height: Int) =
+                    PlateRecognition("A12345", 0.9f, List(6) { 0.9f })
+            },
+            recorder = PerformanceRecorder(),
+            providerName = "TEST",
+            schedule = PipelineSchedule(1, 1),
+            matcher = PlateVehicleMatcher(minimumConsecutiveFrames = 3),
+            cropper = PlateCropper(outputWidth = 20, outputHeight = 8, minimumSourceWidth = 1, minimumSharpness = 0.0),
+            onResult = {},
+            onEvent = events::add,
+        )
+
+        coordinator.process(frame(1, 1_000_000_000L))
+        coordinator.process(frame(2, 1_500_000_000L))
+        assertEquals(0, events.size)
+
+        coordinator.process(frame(3, 2_000_000_000L))
+        assertEquals(1, events.size)
     }
 
     private fun frame(id: Long, timestamp: Long) = ConvertedFrame(

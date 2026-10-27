@@ -4,6 +4,7 @@
   "vehicle": {
     "assetPath": "models/vehicle/model.onnx",
     "labels": { "0": "car", "1": "bus", "2": "truck" },
+    "decode": { "confidence": 0.4, "nmsIou": 0.5, "maxDetections": 100 },
     "contract": {
       "id": "REPLACE_AFTER_REVIEW", "version": "REPLACE", "sha256": "REPLACE_WITH_64_HEX",
       "input": { "name": "images", "shape": [1, 3, 640, 640] },
@@ -14,6 +15,7 @@
   },
   "lane": {
     "assetPath": "models/lane/model.onnx",
+    "decode": { "threshold": 0.5 },
     "contract": {
       "id": "REPLACE_AFTER_REVIEW", "version": "REPLACE", "sha256": "REPLACE_WITH_64_HEX",
       "input": { "name": "images", "shape": [1, 3, 288, 800] },
@@ -23,6 +25,7 @@
   },
   "plate": {
     "assetPath": "models/plate/model.onnx",
+    "decode": { "confidence": 0.5, "nmsIou": 0.4, "maxDetections": 50 },
     "contract": {
       "id": "REPLACE_AFTER_REVIEW", "version": "REPLACE", "sha256": "REPLACE_WITH_64_HEX",
       "input": { "name": "images", "shape": [1, 3, 640, 640] },

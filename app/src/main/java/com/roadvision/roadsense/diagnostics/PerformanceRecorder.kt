@@ -12,6 +12,7 @@ data class DiagnosticsState(
     val capturedFrames: Long = 0,
     val processedFrames: Long = 0,
     val droppedFrames: Long = 0,
+    val errors: Long = 0,
     val lastLatencyMs: Double? = null,
     val latencyP50Ms: Double? = null,
     val latencyP95Ms: Double? = null,
@@ -29,6 +30,7 @@ class PerformanceRecorder(
     private val captured = AtomicLong()
     private val processed = AtomicLong()
     private val dropped = AtomicLong()
+    private val errors = AtomicLong()
     private val captureTimes = ArrayDeque<Long>()
     private val processedTimes = ArrayDeque<Long>()
     private val endToEndLatencies = ArrayDeque<Double>()
@@ -75,6 +77,12 @@ class PerformanceRecorder(
         publish(clockNs(), null)
     }
 
+    @Synchronized
+    fun onError() {
+        errors.incrementAndGet()
+        publish(clockNs(), null)
+    }
+
     private fun publish(now: Long, latencyMs: Double?) {
         trim(captureTimes, now)
         trim(processedTimes, now)
@@ -84,6 +92,7 @@ class PerformanceRecorder(
             capturedFrames = captured.get(),
             processedFrames = processed.get(),
             droppedFrames = dropped.get(),
+            errors = errors.get(),
             lastLatencyMs = latencyMs ?: mutableState.value.lastLatencyMs,
             latencyP50Ms = percentile(endToEndLatencies, 0.50),
             latencyP95Ms = percentile(endToEndLatencies, 0.95),

@@ -22,6 +22,10 @@ SHA-256。未填写的契约不能进入集成测试。
 置信度定义 - NMS 是否由模型内部完成 - 坐标单位与映射方式 - 阈值、NMS IoU
 和最大候选数
 
+上述阈值、NMS IoU 和最大候选数写入 `model-bundle.json` 的 `vehicle.decode` /
+`plate.decode` 块（`confidence`、`nmsIou`、`maxDetections`）；车道阈值写入
+`lane.decode.threshold`。未填写时使用代码默认值，但发布前必须与模型卡一致。
+
 ## 4. 车道识别模型
 
 必须明确输出属于： - 车道线关键点/坐标，或 - 分割掩码，或 -

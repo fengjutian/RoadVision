@@ -49,4 +49,18 @@ class InferenceContractTest {
         assertTrue(result.lanes.isEmpty())
         assertEquals(0f, result.confidence, 0f)
     }
+
+    @Test
+    fun vehicleDecoderCapsCandidatesBeforeNms() {
+        val decoder = VehicleOutputDecoder(mapOf(0 to "car"), 0.1f, 0.9f, maxDetections = 1)
+        val result = decoder.decode(
+            arrayOf(
+                floatArrayOf(0.0f, 0.0f, 0.1f, 0.1f, 0.8f, 0f),
+                floatArrayOf(0.2f, 0.2f, 0.3f, 0.3f, 0.7f, 0f),
+                floatArrayOf(0.4f, 0.4f, 0.5f, 0.5f, 0.6f, 0f),
+            ), 1, 2,
+        )
+        assertEquals(1, result.size)
+        assertEquals(0.8f, result.single().confidence, 0.001f)
+    }
 }

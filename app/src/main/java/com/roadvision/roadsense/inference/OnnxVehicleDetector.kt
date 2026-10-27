@@ -1,6 +1,7 @@
 package com.roadvision.roadsense.inference
 
 import com.roadvision.roadsense.camera.ConvertedFrame
+import com.roadvision.roadsense.pipeline.DetectionDecodeConfig
 
 class OnnxVehicleDetector(
     override val contract: ModelContract,
@@ -8,10 +9,11 @@ class OnnxVehicleDetector(
     private val provider: ExecutionProvider,
     private val runtime: OrtRuntimeManager,
     labels: Map<Int, String>,
-    confidenceThreshold: Float = 0.4f,
-    nmsIouThreshold: Float = 0.5f,
+    decode: DetectionDecodeConfig = DetectionDecodeConfig(),
 ) : VehicleDetector {
-    private val decoder = VehicleOutputDecoder(labels, confidenceThreshold, nmsIouThreshold)
+    private val decoder = VehicleOutputDecoder(
+        labels, decode.confidenceThreshold, decode.nmsIouThreshold, decode.maxDetections,
+    )
 
     override fun detect(frame: ConvertedFrame): List<Detection> {
         val prepared = TensorPreprocessor.prepare(frame, contract)

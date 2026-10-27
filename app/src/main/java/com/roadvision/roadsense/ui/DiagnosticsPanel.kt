@@ -41,7 +41,8 @@ fun DiagnosticsPanel(status: CameraStatus, diagnostics: DiagnosticsState, modifi
             style = MaterialTheme.typography.bodySmall,
         )
         Text(
-            "采集 ${diagnostics.capturedFrames}  ·  处理 ${diagnostics.processedFrames}  ·  丢弃 ${diagnostics.droppedFrames}",
+            "采集 ${diagnostics.capturedFrames}  ·  处理 ${diagnostics.processedFrames}  ·  丢弃 ${diagnostics.droppedFrames}" +
+                "  ·  错误 ${diagnostics.errors}",
             color = Color(0xFFCAD5D0),
             style = MaterialTheme.typography.bodySmall,
         )

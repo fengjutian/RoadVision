@@ -54,6 +54,7 @@ class CameraController(
                     try {
                         scheduler.submit(FrameConverter.convert(image, frameIds.incrementAndGet()))
                     } catch (error: Throwable) {
+                        recorder.onError()
                         onStatus(CameraStatus.Error(error.message ?: "帧转换失败"))
                     } finally {
                         // Never hand an ImageProxy to another thread.
@@ -64,6 +65,7 @@ class CameraController(
                 cameraProvider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
                 onStatus(CameraStatus.Running)
             } catch (error: Throwable) {
+                recorder.onError()
                 onStatus(CameraStatus.Error(error.message ?: "相机启动失败"))
             }
         }, ContextCompat.getMainExecutor(context))

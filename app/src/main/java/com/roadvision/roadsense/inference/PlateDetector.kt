@@ -1,6 +1,7 @@
 package com.roadvision.roadsense.inference
 
 import com.roadvision.roadsense.camera.ConvertedFrame
+import com.roadvision.roadsense.pipeline.DetectionDecodeConfig
 
 interface PlateDetector {
     val contract: ModelContract
@@ -12,10 +13,18 @@ class OnnxPlateDetector(
     private val assetPath: String,
     private val provider: ExecutionProvider,
     private val runtime: OrtRuntimeManager,
-    confidenceThreshold: Float = 0.5f,
-    nmsIouThreshold: Float = 0.4f,
+    decode: DetectionDecodeConfig = DetectionDecodeConfig(
+        confidenceThreshold = 0.5f,
+        nmsIouThreshold = 0.4f,
+        maxDetections = 50,
+    ),
 ) : PlateDetector {
-    private val decoder = VehicleOutputDecoder(mapOf(0 to "plate"), confidenceThreshold, nmsIouThreshold)
+    private val decoder = VehicleOutputDecoder(
+        mapOf(0 to "plate"),
+        decode.confidenceThreshold,
+        decode.nmsIouThreshold,
+        decode.maxDetections,
+    )
 
     override fun detect(frame: ConvertedFrame): List<Detection> {
         val prepared = TensorPreprocessor.prepare(frame, contract)

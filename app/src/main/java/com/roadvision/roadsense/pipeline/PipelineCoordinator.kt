@@ -61,6 +61,7 @@ class PipelineCoordinator(
         val activeTrackIds = tracked.mapTo(mutableSetOf()) { it.trackId }
         ocrScheduler.prune(activeTrackIds)
         ocrFusion.prune(activeTrackIds)
+        matcher.prune(activeTrackIds)
         persistedTracks.retainAll(activeTrackIds)
         val vehicles = tracked.filter { it.missedFrames == 0 }
         if (frame.frameId % schedule.laneEveryFrames == 0L) lastLane = laneDetector.detect(frame)
@@ -80,7 +81,8 @@ class PipelineCoordinator(
         val candidates = detections.map { PlateCandidate(it.box, it.confidence, it.timestampNs) }
         val matches = matcher.match(candidates, vehicles).associateBy { it.plate }
         return candidates.mapNotNull { candidate ->
-            val trackId = matches[candidate]?.trackId ?: return@mapNotNull null
+            val match = matches[candidate] ?: return@mapNotNull null
+            val trackId = match.trackId
             val box = candidate.box
             val crop = cropper.crop(
                 frame,
@@ -92,7 +94,7 @@ class PipelineCoordinator(
             if (!ocrScheduler.shouldRun(trackId, frame.timestampNs, crop.acceptable)) return@mapNotNull null
             val recognition = recognizer.recognize(crop.rgb, crop.width, crop.height) ?: return@mapNotNull null
             val fused = ocrFusion.add(OcrObservation(trackId, recognition.text, recognition.confidence, frame.timestampNs))
-            if (!fused.uncertain && persistedTracks.add(trackId)) {
+            if (!fused.uncertain && match.confirmed && persistedTracks.add(trackId)) {
                 onEvent(
                     DetectionEventEntity(
                         trackId = trackId,

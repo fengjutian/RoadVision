@@ -12,9 +12,11 @@ class VehicleOutputDecoder(
     private val labels: Map<Int, String>,
     private val confidenceThreshold: Float,
     private val nmsIouThreshold: Float,
+    private val maxDetections: Int = 100,
 ) {
     init {
         require(confidenceThreshold in 0f..1f && nmsIouThreshold in 0f..1f)
+        require(maxDetections in 1..1_000)
     }
 
     fun decode(rows: Array<FloatArray>, frameId: Long, timestampNs: Long): List<Detection> {
@@ -33,7 +35,7 @@ class VehicleOutputDecoder(
                 frameId = frameId,
                 timestampNs = timestampNs,
             )
-        }.sortedByDescending(Detection::confidence)
+        }.sortedByDescending(Detection::confidence).take(maxDetections)
 
         val selected = mutableListOf<Detection>()
         candidates.forEach { candidate ->

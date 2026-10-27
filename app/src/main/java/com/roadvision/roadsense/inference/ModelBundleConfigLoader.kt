@@ -1,6 +1,8 @@
 package com.roadvision.roadsense.inference
 
 import android.content.Context
+import com.roadvision.roadsense.pipeline.DetectionDecodeConfig
+import com.roadvision.roadsense.pipeline.LaneDecodeConfig
 import com.roadvision.roadsense.pipeline.ModelAssetConfig
 import com.roadvision.roadsense.pipeline.ModelBundleValidator
 import com.roadvision.roadsense.pipeline.PipelineModelConfig
@@ -31,12 +33,29 @@ object ModelBundleConfigLoader {
             ocrAlphabet = ocr.getJSONArray("alphabet").strings().map { it.single() },
             ocrBlankIndex = ocr.getInt("blankIndex"),
             provider = provider,
+            vehicleDecode = detectionDecode(vehicle.optJSONObject("decode"), DetectionDecodeConfig()),
+            plateDecode = detectionDecode(
+                plate.optJSONObject("decode"),
+                DetectionDecodeConfig(confidenceThreshold = 0.5f, nmsIouThreshold = 0.4f, maxDetections = 50),
+            ),
+            laneDecode = LaneDecodeConfig(
+                lane.optJSONObject("decode")?.optDouble("threshold", 0.5)?.toFloat() ?: 0.5f,
+            ),
             schedule = root.optJSONObject("schedule")?.let {
                 PipelineSchedule(it.optInt("laneEveryFrames", 3), it.optInt("plateEveryFrames", 3))
             } ?: PipelineSchedule(),
         )
         ModelBundleValidator.validate(config)
         return config
+    }
+
+    private fun detectionDecode(json: JSONObject?, default: DetectionDecodeConfig): DetectionDecodeConfig {
+        if (json == null) return default
+        return DetectionDecodeConfig(
+            confidenceThreshold = json.optDouble("confidence", default.confidenceThreshold.toDouble()).toFloat(),
+            nmsIouThreshold = json.optDouble("nmsIou", default.nmsIouThreshold.toDouble()).toFloat(),
+            maxDetections = json.optInt("maxDetections", default.maxDetections),
+        )
     }
 
     private fun asset(json: JSONObject) = ModelAssetConfig(
