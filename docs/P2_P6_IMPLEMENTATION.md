@@ -13,8 +13,9 @@
 
 | 项目 | 状态 | 产物/说明 |
 |---|---|---|
-| ORT Session 生命周期 | IMPLEMENTED | `OrtRuntimeManager` 按模型路径和执行提供器复用 Session，并统一释放 |
+| ORT Session 生命周期 | IMPLEMENTED | `OrtRuntimeManager` 按模型路径和执行提供器复用 Session；关闭时只释放 Session，保留进程级 ORT 环境以支持重载 |
 | 模型 I/O 契约 | IMPLEMENTED | `ModelContract`、`TensorSpec`；强制模型版本、SHA-256、布局、颜色和归一化信息 |
+| 模型清单校验 | IMPLEMENTED | `ModelBundleValidator` 校验资产路径限制在 `models/`、固定输入维度、NCHW/NHWC 通道数，以及检测 `[1,N,6]`、车道 `[1,1,H,W]`、OCR `[1,T,字母表+1]` 输出形状 |
 | 输出校验 | IMPLEMENTED | 维度、NaN/Inf、置信度、类别和归一化坐标检查 |
 | 坐标映射 | IMPLEMENTED | letterbox 正反向映射，坐标统一为预览归一化坐标 |
 | 车辆模型适配 | READY_FOR_ASSET | 支持 `[1,N,6]` 检测输出的阈值与 NMS；具体模型需填模型卡 |
@@ -32,7 +33,8 @@ SHA-256；任何一个资产失败都会终止整条流水线，不允许部分�
 配置方式：复制 `app/src/main/assets/models/model-bundle.json.example` 为
 `model-bundle.json`，逐项替换经过审查的路径、64 位 SHA-256、张量名称/形状、标签、OCR
 字符集及 blank 索引。应用启动后在后台解析并校验；缺少清单时保持 `NotConfigured`，加载或
-推理失败时清除旧叠加并显示错误，可由用户手动重试。
+推理失败时清除旧叠加并显示错误，可由用户手动重试。清单结构错误（路径越界、维度不匹配、
+输出通道与字母表不一致）会在创建任何 Session 前直接失败，并显示具体原因。
 
 ## 3. P3：车辆跟踪与叠加
 
@@ -50,6 +52,8 @@ SHA-256；任何一个资产失败都会终止整条流水线，不允许部分�
 - `PlateCropper` 对四角区域进行目标尺寸重采样，并以拉普拉斯方差判断模糊。
 - `OcrScheduler` 同时限制最小时间间隔和单轨迹最大尝试次数。
 - `OcrTemporalFusion` 以文本置信度加权；观察次数或置信度不足时必须标记 `uncertain`。
+- 每帧结束前按 `VehicleTracker` 当前活跃 Track 清理 OCR 调度、融合历史和已落库标记，避免
+  长时间运行或大量短暂目标导致状态无界增长。
 - `PlateVehicleMatcher` 仅产生几何候选；进入事件存储前还应结合跨帧连续性。
 - OCR 字符集、空白索引和车牌规范必须来自已审查模型卡，不得猜测。
 

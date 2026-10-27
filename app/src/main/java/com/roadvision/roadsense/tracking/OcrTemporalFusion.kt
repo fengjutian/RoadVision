@@ -42,5 +42,13 @@ class OcrTemporalFusion(
         )
     }
 
+    @Synchronized
+    fun prune(activeTrackIds: Set<Long>) {
+        history.keys.retainAll(activeTrackIds)
+    }
+
+    @Synchronized
+    internal fun trackedTrackCount(): Int = history.size
+
     private fun normalize(value: String) = value.uppercase().filter(Char::isLetterOrDigit)
 }

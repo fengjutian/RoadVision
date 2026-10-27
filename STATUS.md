@@ -20,10 +20,13 @@
 - 车牌四角裁剪、清晰度拒识、OCR 限频、多帧融合与不确定状态；
 - P2–P5 端到端 `PipelineCoordinator` 及分频调度；
 - Room v2 事件库、显式迁移、保留策略、单条/全部删除和日志脱敏；
-- 车辆/车道叠加、事件列表，以及 E2E/推理 P50/P95、内存、热状态诊断字段。
+- 车辆/车道叠加、事件列表，以及 E2E/推理 P50/P95、内存、热状态诊断字段；
+- 模型清单结构校验（资产路径、NCHW/NHWC 通道、检测/掩码/CTC 输出形状）与启动时配置加载；
+- OCR 调度、融合和已落库标记按活跃 Track 清理，长稳运行不随轨迹数无界增长；
+- 推理失败后关闭并重载流水线时复用进程级 ORT 环境，避免重试链路失效。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 21 项单元测试，生成
+`BUILD SUCCESSFUL`，当前共有 32 项单元测试，生成
 `app/build/outputs/apk/debug/app-debug.apk`。APK 已包含 P2–P5 运行时代码，
 但不包含车辆、车道、车牌或 OCR 权重；在合法模型资产与模型卡就绪前，UI 明确保持模型禁用状态。
 

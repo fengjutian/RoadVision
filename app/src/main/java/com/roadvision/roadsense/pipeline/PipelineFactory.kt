@@ -54,6 +54,7 @@ object PipelineFactory {
         onResult: (FusedPerceptionResult) -> Unit,
         onEvent: (DetectionEventEntity) -> Unit,
     ): ActivePipeline {
+        ModelBundleValidator.validate(config)
         listOf(config.vehicle, config.lane, config.plate, config.ocr).forEach {
             ModelAssetVerifier.verify(context, it.assetPath, it.contract.sha256)
         }

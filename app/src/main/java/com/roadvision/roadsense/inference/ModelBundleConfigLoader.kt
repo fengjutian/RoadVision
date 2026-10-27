@@ -2,6 +2,7 @@ package com.roadvision.roadsense.inference
 
 import android.content.Context
 import com.roadvision.roadsense.pipeline.ModelAssetConfig
+import com.roadvision.roadsense.pipeline.ModelBundleValidator
 import com.roadvision.roadsense.pipeline.PipelineModelConfig
 import com.roadvision.roadsense.pipeline.PipelineSchedule
 import org.json.JSONArray
@@ -21,7 +22,7 @@ object ModelBundleConfigLoader {
         val lane = root.getJSONObject("lane")
         val plate = root.getJSONObject("plate")
         val ocr = root.getJSONObject("ocr")
-        return PipelineModelConfig(
+        val config = PipelineModelConfig(
             vehicle = asset(vehicle),
             vehicleLabels = stringMap(vehicle.getJSONObject("labels")),
             lane = asset(lane),
@@ -34,6 +35,8 @@ object ModelBundleConfigLoader {
                 PipelineSchedule(it.optInt("laneEveryFrames", 3), it.optInt("plateEveryFrames", 3))
             } ?: PipelineSchedule(),
         )
+        ModelBundleValidator.validate(config)
+        return config
     }
 
     private fun asset(json: JSONObject) = ModelAssetConfig(

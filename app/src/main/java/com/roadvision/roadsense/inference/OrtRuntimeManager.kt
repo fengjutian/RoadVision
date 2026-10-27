@@ -82,6 +82,7 @@ class OrtRuntimeManager(private val context: Context) : Closeable {
     override fun close() {
         sessions.values.forEach(OrtSession::close)
         sessions.clear()
-        environment.close()
+        // OrtEnvironment is a process-wide singleton. Closing it here would leave later
+        // pipeline reloads (for example after "重新加载模型") with a dead environment.
     }
 }

@@ -20,4 +20,11 @@ class OcrScheduler(
     }
 
     fun forget(trackId: Long) { states.remove(trackId) }
+
+    /** Drops per-track counters once a track leaves the tracker, keeping long runs bounded. */
+    fun prune(activeTrackIds: Set<Long>) {
+        states.keys.retainAll(activeTrackIds)
+    }
+
+    internal fun trackedTrackCount(): Int = states.size
 }

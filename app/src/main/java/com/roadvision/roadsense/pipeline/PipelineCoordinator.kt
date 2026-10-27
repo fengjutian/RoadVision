@@ -57,8 +57,12 @@ class PipelineCoordinator(
 
     fun process(frame: ConvertedFrame) {
         val started = System.nanoTime()
-        val vehicles = tracker.update(vehicleDetector.detect(frame), frame.timestampNs)
-            .filter { it.missedFrames == 0 }
+        val tracked = tracker.update(vehicleDetector.detect(frame), frame.timestampNs)
+        val activeTrackIds = tracked.mapTo(mutableSetOf()) { it.trackId }
+        ocrScheduler.prune(activeTrackIds)
+        ocrFusion.prune(activeTrackIds)
+        persistedTracks.retainAll(activeTrackIds)
+        val vehicles = tracked.filter { it.missedFrames == 0 }
         if (frame.frameId % schedule.laneEveryFrames == 0L) lastLane = laneDetector.detect(frame)
         val fusedPlates = if (frame.frameId % schedule.plateEveryFrames == 0L) {
             processPlates(frame, vehicles)
