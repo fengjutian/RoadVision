@@ -44,6 +44,10 @@
   （下半幅垂直边缘 → (斜率, 截距) 投票 → 左右各一条线），不需要权重也不需要许可审查；同一份
   代码里 `assetPath` 一旦出现就切回 ONNX 车道模型，上层调度与叠加层不变。掩码解码同时升级为
   多车道：行内非极大值抑制 + 邻近行连线，最多输出 3 条折线，不再把左右车道平均成一条；
+- UFLD 车道模型路径已打通但未启用：合同支持 `resize: "stretch"`（UFLD 用拉伸而非 letterbox），
+  输出 `[1, cells+1, rows, lanes]` 由 `UfldLaneDecoder` 按行锚点解码。候选权重为 CULane
+  ResNet18（代码 MIT，直链与契约见 `docs/DEPENDENCIES.md` 5.2），原始导出 165 MB 且含 aux
+  分割头，需裁剪 + 量化后才适合进 APK；
 - 叠加层改为与 CameraX `PreviewView` 同一 Android 视图层级的 `RoadOverlayView`，避免 Compose Canvas
   被相机预览遮挡；已用临时常量输出模型在真机确认车辆框、Track ID 和置信度标签可见；
 - 横竖屏自适应布局：按窗口尺寸切换；横屏把诊断/事件放进右侧栏、相机画面占满左侧剩余区域，竖屏折叠为
@@ -53,7 +57,7 @@
   `configChanges`，旋屏不重建界面、不中断已绑定的预览与前台采集。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 83 项单元测试，生成
+`BUILD SUCCESSFUL`，当前共有 89 项单元测试，生成
 `app/build/outputs/apk/debug/app-debug.apk`。本地评测构建已接入车辆检测权重
 （Ultralytics YOLO11n，APK 内含 `model-bundle.json` 与 `models/vehicle/model.onnx`）；
 车道 classical 实现已提供，可通过清单 `lane.mode = "classical"` 启用；当前性能评测 APK 使用
@@ -84,14 +88,17 @@ CPU 推理，采集 5.7 FPS、分析 4.9 FPS，推理 P50/P95 154.3/216.3 ms，�
 CPU 推理 P50/P95 约 154/216 ms，表现最好；XNNPACK 约 323/497 ms，明显更慢；NNAPI
 在首次推理时报 `ORT_FAIL`。`PipelineFactory` 现在会在开始采集前用零输入预热每个已声明模型，
 因此 NNAPI 这类“Session 能建、第一次 run 失败”的提供器会回退 CPU，而不是把整条流水线切成
-Failed。15 FPS 目标仍未达到。
+Failed。车辆-only 的明亮场景真机端到端已达到 28.1 FPS，但暗光/密集场景仍未稳定达到 15 FPS。
 
-输入尺寸与预处理对比已单独记录在 `docs/VEHICLE_PERFORMANCE.md`：固定集上 416/384/352 都是
-5/5 通过，320 降到 4/5；真机车辆-only 从 640 的约 230 ms 推理降到 416 的约 50–70 ms，持续
-30 秒约 13.7 FPS（瞬时 15.4）；352 实际检出 1 辆车（82%），416 在夜间多车画面实际检出 5 辆
-（置信度 35%–64%），但该密集场景只有 3.4 FPS、推理 P50 146.7 ms。开启 classical lane 后约
-6 FPS，车道成为新的主要开销。15 FPS 目前只在较简单场景瞬时可达到，不能宣称稳定达标。
-该文档同时记录了固定集是单图合成缩放、不是道路数据集的限制。
+输入尺寸与预处理对比已单独记录在 `docs/VEHICLE_PERFORMANCE.md`：固定集上 352/384/416 都是
+5/5 通过，320 降到 4/5。debug-only 合成基准（480×640 合成 YUV → 转换 → 管线，无相机）：
+352 为 **27.1 FPS**、e2e P50/P95 34.6/45.6 ms；416 为 **21.5 FPS**、44.4/56.8 ms；352 因此
+作为默认候选。真机相机路径：352 在**明亮场景采集 30.1 / 分析 28.1 FPS、推理 33.2/36.7 ms、
+延迟 83.1 ms**；同一 352 在暗光场景采集 11.2 / 分析 6.4 FPS；416 简单场景持续 13.7 FPS，
+夜间多车仅 3.4 FPS。分析 FPS 高度依赖采集帧率和热状态，不能把管线 27.1 FPS 当作所有场景的
+端到端结论。352 实际检出 1 辆车（82%），416 夜间多车检出 5 辆（置信度 35%–64%）。开启
+classical lane 后约 6 FPS，车道成为新的主要开销。**明亮场景 15 FPS 已复现，跨场景稳定
+15 FPS 仍未验证，不能宣称全面达标。** 该文档同时记录了固定集是单图合成缩放、不是道路数据集的限制。
 
 **已确定的项目决定：** 项目名
 RoadVision；默认本地处理，未来允许用户主动上传；首版车辆检测、车道识别、跟踪、车牌

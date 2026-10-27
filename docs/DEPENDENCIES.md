@@ -92,6 +92,40 @@ RoadVision 的目标是闭源商业用途。任何模型、权重、数据集、
     `models[].id/version` 会带上该标记；
 -   该构建仅用于真机链路与性能评测，不得作为候选发布 APK。
 
+## 5.2 车道模型候选（评测中，未定稿）
+
+| 字段 | 值 |
+|---|---|
+| 名称 | Ultra-Fast-Lane-Detection, CULane, ResNet18（`culane_18.onnx`） |
+| 上游代码 | https://github.com/cfzd/Ultra-Fast-Lane-Detection ，**MIT** |
+| 训练数据 | CULane（中国城区道路车道线，4 条车道） |
+| ONNX 来源 | ailia-models 导出，`https://storage.googleapis.com/ailia-models/ultra-fast-lane-detection/culane_18.onnx`（可连通的 GCS 直链） |
+| 输入 | `input.1`，`[1, 3, 288, 800]`，NCHW，RGB，`scale = 1/255`，**stretch 缩放**（非 letterbox） |
+| 输出 | `200`，`[1, 201, 18, 4]`：200 个位置桶 + 1 个“无车道”类，18 个行锚点，4 条车道 |
+| 行锚点 | `[121,131,141,150,160,170,180,189,199,209,219,228,238,248,258,267,277,287] / 288` |
+| 体积 | **165 MB**（含 `use_aux` 分割头），不能直接塞进 APK |
+| 结论 | `CONDITIONAL`：需先裁剪 aux 分支并量化（INT8）后再评估体积/精度 |
+
+启用方式（模型文件就位后，本地清单 `model-bundle.json`）：
+
+```json
+"lane": {
+  "assetPath": "models/lane/model.onnx",
+  "decode": { "type": "ufld", "threshold": 0.3, "rowAnchors": [0.4201, 0.4549, "…"] },
+  "contract": {
+    "id": "ufld-culane-res18-288x800", "version": "1.0-evaluation",
+    "sha256": "<文件哈希>",
+    "input": { "name": "input.1", "shape": [1, 3, 288, 800] },
+    "outputs": [{ "name": "200", "shape": [1, 201, 18, 4] }],
+    "layout": "NCHW", "colorOrder": "RGB", "scale": 0.0039215686,
+    "resize": "stretch"
+  }
+}
+```
+
+解码器与 stretch 预处理已实现并通过单测（`UfldLaneDecoderTest`）；`mode: "classical"` 的
+无权重兜底保留，作为模型未就位时的默认。
+
 ## 6. 第三方依赖清单模板
 
   ---------------------------------------------------------------------------------------
