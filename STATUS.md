@@ -53,11 +53,12 @@
   `configChanges`，旋屏不重建界面、不中断已绑定的预览与前台采集。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 82 项单元测试，生成
+`BUILD SUCCESSFUL`，当前共有 83 项单元测试，生成
 `app/build/outputs/apk/debug/app-debug.apk`。本地评测构建已接入车辆检测权重
 （Ultralytics YOLO11n，APK 内含 `model-bundle.json` 与 `models/vehicle/model.onnx`）；
-车道、车牌与 OCR 仍无权重，清单中省略后不加载也不产生结果。该权重为 AGPL-3.0、审查结论
-`BLOCKED`，只用于内部链路与性能评测，权重文件与本地评测清单均不入库（见
+车道 classical 实现已提供，可通过清单 `lane.mode = "classical"` 启用；当前性能评测 APK 使用
+vehicle-only 清单。车牌与 OCR 仍无权重，清单中省略后不加载也不产生结果。该车辆权重为
+AGPL-3.0、审查结论 `BLOCKED`，只用于内部链路与性能评测，权重文件与本地评测清单均不入库（见
 `docs/DEPENDENCIES.md` 5.1）；干净 clone 只保留示例清单，需本地放置清单和权重。
 车辆-only 模板见 `app/src/main/assets/models/model-bundle.vehicle-only.json.example`，
 用于在其余权重未就绪时先验证车辆检测链路。
@@ -85,6 +86,13 @@ CPU 推理 P50/P95 约 154/216 ms，表现最好；XNNPACK 约 323/497 ms，明�
 因此 NNAPI 这类“Session 能建、第一次 run 失败”的提供器会回退 CPU，而不是把整条流水线切成
 Failed。15 FPS 目标仍未达到。
 
+输入尺寸与预处理对比已单独记录在 `docs/VEHICLE_PERFORMANCE.md`：固定集上 416/384/352 都是
+5/5 通过，320 降到 4/5；真机车辆-only 从 640 的约 230 ms 推理降到 416 的约 50–70 ms，持续
+30 秒约 13.7 FPS（瞬时 15.4）；352 实际检出 1 辆车（82%），416 在夜间多车画面实际检出 5 辆
+（置信度 35%–64%），但该密集场景只有 3.4 FPS、推理 P50 146.7 ms。开启 classical lane 后约
+6 FPS，车道成为新的主要开销。15 FPS 目前只在较简单场景瞬时可达到，不能宣称稳定达标。
+该文档同时记录了固定集是单图合成缩放、不是道路数据集的限制。
+
 **已确定的项目决定：** 项目名
 RoadVision；默认本地处理，未来允许用户主动上传；首版车辆检测、车道识别、跟踪、车牌
 OCR；交付内部测试 APK；持续稳定 15 FPS 为目标；技术路线 Kotlin +
@@ -96,7 +104,10 @@ CameraX + YOLO ONNX + ONNX Runtime；闭源商业用途。
 3. 为已批准模型填写精确输入输出契约、标签/字符集并加入资产。 4.
 在真机验证连续采集、旋转、权限撤销和资源释放。 5.
 建立真机性能基准；目前只有仅采集基线（7.87 FPS、无推理），15 FPS 与延迟仍无实测结论。 6.
-冻结测试视频/数据集与准确率验收阈值。
+冻结测试视频/数据集与准确率验收阈值。 7.
+车牌与 OCR：推理、矫正、融合、关联代码已实现但无权重；2026-10-27 决定**暂缓开发**（不新建训练
+工程），方案、路线对比、前置条件与工作拆解见 `docs/PLATE_RECOGNITION_PLAN.md`，恢复前需先确认
+数据集许可与训练算力。
 
 **仍需真机验证：** 熄屏采集依赖前台 `camera` 类型服务，通知权限、Android 14/15
 前台服务限制和 MagicOS 电源策略必须在目标荣耀机型上实测；当前没有真机结果。
