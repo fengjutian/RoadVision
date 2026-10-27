@@ -26,6 +26,9 @@
 [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md) 中将状态更新为 `APPROVED`，填写 SHA-256，
 并使运行时契约与模型真实输入输出完全一致。
 
+模型批准后，由 `PipelineFactory` 统一激活四个资产。工厂会在创建任何 Session 前验证全部
+SHA-256；任何一个资产失败都会终止整条流水线，不允许部分模型静默运行。
+
 ## 3. P3：车辆跟踪与叠加
 
 `VehicleTracker` 使用类别一致性和 IoU 关联，时间戳必须单调。轨迹允许短时丢帧，超过
