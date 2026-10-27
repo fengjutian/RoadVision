@@ -34,7 +34,9 @@ object TensorPreprocessor {
                 }
                 val raw = if (sourceX in 0 until frame.width && sourceY in 0 until frame.height) {
                     frame.rgb[(sourceY * frame.width + sourceX) * 3 + sourceChannel].toInt() and 255
-                } else 0
+                } else {
+                    contract.padPixel
+                }
                 val normalized = (raw * contract.scale - contract.mean[channel]) / contract.std[channel]
                 val target = when (contract.layout) {
                     TensorLayout.NCHW -> channel * inputWidth * inputHeight + y * inputWidth + x

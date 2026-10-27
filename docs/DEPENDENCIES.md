@@ -65,6 +65,27 @@ RoadVision 的目标是闭源商业用途。任何模型、权重、数据集、
   OCR        待选            待填     待填     待核验     待核验     待核验     UNKNOWN
   ---------------------------------------------------------------------------------------
 
+## 5.1 当前本地评测模型（未通过审查，仅限内部测试）
+
+| 字段 | 值 |
+|---|---|
+| 名称与用途 | Ultralytics YOLO11n（COCO 预训练），车辆检测 |
+| 官方来源 | https://github.com/ultralytics/ultralytics ，权重取自 https://huggingface.co/Ultralytics/YOLO11 |
+| 版本 | ultralytics 8.4.190；权重文件 `yolo11n.pt` |
+| 代码许可证 | AGPL-3.0 |
+| 权重许可证 | 沿用 Ultralytics 许可条款（商用需商业授权）；**未核验，按阻断处理** |
+| 训练数据 | COCO 2017（80 类，含 car/bus/truck/motorcycle） |
+| 导出方式 | `tools/export_vehicle_model.py`，opset 17，内置 NMS，输出 `[1, 300, 6]` 并归一化坐标 |
+| ONNX SHA-256 | `8bddec960d5b34bd400be4b9dc401e4e140bec0f0e5807f962b0044308d2ac67`（640×640 输入） |
+| 结论 | `BLOCKED`（闭源分发前必须取得商业授权或替换模型） |
+
+使用约束（已落实）：
+
+-   `.onnx` 二进制与 `.model-cache/` 均在 `.gitignore` 中，**不入库**；
+-   `app/src/main/assets/models/model-bundle.json` 的 contract id 标注
+    `-agpl-evaluation-only`，导出报告的 `models[].id/version` 会带上该标记；
+-   该构建仅用于真机链路与性能评测，不得作为候选发布 APK。
+
 ## 6. 第三方依赖清单模板
 
   ---------------------------------------------------------------------------------------

@@ -27,9 +27,12 @@ class VehicleOutputDecoder(
             if (score < confidenceThreshold) return@mapNotNull null
             val classId = row[5].toInt()
             require(row[5] == classId.toFloat()) { "Class ID must be an integer" }
+            // The bundle's label map is the class allow-list: a COCO model also reports persons,
+            // bicycles or furniture, which must not enter vehicle tracking.
+            val label = labels[classId] ?: return@mapNotNull null
             Detection(
                 classId = classId,
-                label = labels[classId] ?: "class-$classId",
+                label = label,
                 confidence = score,
                 box = OutputValidator.normalizedBox(row[0], row[1], row[2], row[3]),
                 frameId = frameId,

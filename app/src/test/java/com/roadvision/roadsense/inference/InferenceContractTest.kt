@@ -44,6 +44,20 @@ class InferenceContractTest {
     }
 
     @Test
+    fun vehicleDecoderDropsClassesTheBundleDoesNotDeclare() {
+        val decoder = VehicleOutputDecoder(mapOf(2 to "car", 5 to "bus"), 0.3f, 0.5f)
+        val result = decoder.decode(
+            arrayOf(
+                floatArrayOf(0.1f, 0.1f, 0.5f, 0.5f, 0.9f, 2f),
+                floatArrayOf(0.2f, 0.2f, 0.6f, 0.6f, 0.9f, 0f),
+                floatArrayOf(0.3f, 0.3f, 0.7f, 0.7f, 0.9f, 5f),
+            ), 1, 2,
+        )
+        assertEquals(2, result.size)
+        assertEquals(setOf("car", "bus"), result.map { it.label }.toSet())
+    }
+
+    @Test
     fun laneDecoderMarksEmptyResultUnavailable() {
         val result = LaneMaskDecoder(4, 4, 0.8f, 1).decode(FloatArray(16), 1, 2)
         assertTrue(result.lanes.isEmpty())

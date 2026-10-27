@@ -31,4 +31,34 @@ class TensorPreprocessorTest {
         assertEquals(128f / 255f, tensor.values[1], 0.001f)
         assertEquals(1f, tensor.values[2], 0.001f)
     }
+
+    @Test
+    fun letterboxPadsWithTheContractPixelNotBlack() {
+        val contract = ModelContract(
+            "test", "1", hash, TensorSpec("input", longArrayOf(1, 3, 2, 2)),
+            listOf(TensorSpec("out", longArrayOf(1))), TensorLayout.NCHW, ColorOrder.RGB,
+            padPixel = 114,
+        )
+        // A 4x1 source letterboxed into a 2x2 input leaves the top row as padding.
+        val frame = ConvertedFrame(1, 1, 4, 1, 0, ByteArray(12) { 255.toByte() })
+        val tensor = TensorPreprocessor.prepare(frame, contract)
+
+        assertEquals(114f / 255f, tensor.values[0], 0.001f)
+        assertEquals(114f / 255f, tensor.values[1], 0.001f)
+        assertEquals(1f, tensor.values[2], 0.001f)
+    }
+
+    @Test
+    fun letterboxPaddingHonoursAConfiguredPixel() {
+        val contract = ModelContract(
+            "test", "1", hash, TensorSpec("input", longArrayOf(1, 3, 2, 2)),
+            listOf(TensorSpec("out", longArrayOf(1))), TensorLayout.NCHW, ColorOrder.RGB,
+            padPixel = 0,
+        )
+        val frame = ConvertedFrame(1, 1, 4, 1, 0, ByteArray(12) { 255.toByte() })
+        val tensor = TensorPreprocessor.prepare(frame, contract)
+
+        assertEquals(0f, tensor.values[0], 0.001f)
+        assertEquals(1f, tensor.values[2], 0.001f)
+    }
 }

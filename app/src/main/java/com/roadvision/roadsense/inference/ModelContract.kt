@@ -24,12 +24,19 @@ data class ModelContract(
     val scale: Float = 1f / 255f,
     val mean: FloatArray = floatArrayOf(0f, 0f, 0f),
     val std: FloatArray = floatArrayOf(1f, 1f, 1f),
+    /**
+     * Raw pixel value used for letterbox padding, before [scale]/[mean]/[std]. YOLO-family models
+     * are trained with grey 114 padding; black 0 padding shifts the border region and hurts recall
+     * near the top and bottom of a 4:3 frame.
+     */
+    val padPixel: Int = 114,
 ) {
     init {
         require(id.isNotBlank() && version.isNotBlank())
         require(sha256.matches(Regex("[a-fA-F0-9]{64}"))) { "Model SHA-256 is required" }
         require(input.shape.size == 4) { "Image input must be rank 4" }
         require(mean.size == 3 && std.size == 3 && std.all { it > 0f })
+        require(padPixel in 0..255) { "Letterbox pad pixel must be a byte value" }
         require(outputs.isNotEmpty())
     }
 }

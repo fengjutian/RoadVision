@@ -12,3 +12,9 @@ captures/
 app/build/
 *.apk
 *.aab
+
+# Local evaluation weights and export scratch space. The current vehicle model is
+# Ultralytics YOLO11 (AGPL-3.0): regenerate it with tools/export_vehicle_model.py,
+# never commit it until the licence review in docs/DEPENDENCIES.md clears it.
+.model-cache/
+app/src/main/assets/models/**/*.onnx

@@ -96,6 +96,7 @@ object ModelBundleConfigLoader {
         scale = json.optDouble("scale", 1.0 / 255.0).toFloat(),
         mean = json.optJSONArray("mean")?.floatArray() ?: floatArrayOf(0f, 0f, 0f),
         std = json.optJSONArray("std")?.floatArray() ?: floatArrayOf(1f, 1f, 1f),
+        padPixel = json.optInt("padPixel", 114),
     )
 
     private fun tensor(json: JSONObject) = TensorSpec(
