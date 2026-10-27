@@ -75,15 +75,21 @@ RoadVision 的目标是闭源商业用途。任何模型、权重、数据集、
 | 代码许可证 | AGPL-3.0 |
 | 权重许可证 | 沿用 Ultralytics 许可条款（商用需商业授权）；**未核验，按阻断处理** |
 | 训练数据 | COCO 2017（80 类，含 car/bus/truck/motorcycle） |
-| 导出方式 | `tools/export_vehicle_model.py`，opset 17，内置 NMS，输出 `[1, 300, 6]` 并归一化坐标 |
-| ONNX SHA-256 | `8bddec960d5b34bd400be4b9dc401e4e140bec0f0e5807f962b0044308d2ac67`（640×640 输入） |
+| 导出方式 | `tools/export_vehicle_model.py --imgsz <尺寸>`，opset 17，内置 NMS，输出 `[1, 300, 6]` 并归一化坐标 |
+| ONNX SHA-256 | `c2cc17325a6ab9870f7b11834a5dc52088306bf841f26c5bbbffdf3e0f97c657`（416×416 输入；此前 640×640 版本 `8bddec96…` 已弃用） |
 | 结论 | `BLOCKED`（闭源分发前必须取得商业授权或替换模型） |
+
+车道目前不依赖任何权重：`model-bundle.json` 中的 `"lane": { "mode": "classical" }` 选用
+`ClassicalLaneDetector`（边缘 + 霍夫投票），只用于让调度、坐标映射与叠加层在真机跑通，
+**不能**作为车道识别准确率依据；换成 ONNX 车道模型时删掉 `mode`、填 `assetPath` 与契约即可。
 
 使用约束（已落实）：
 
--   `.onnx` 二进制与 `.model-cache/` 均在 `.gitignore` 中，**不入库**；
--   `app/src/main/assets/models/model-bundle.json` 的 contract id 标注
-    `-agpl-evaluation-only`，导出报告的 `models[].id/version` 会带上该标记；
+-   `.onnx` 二进制、本地评测清单 `app/src/main/assets/models/model-bundle.json` 与
+    `.model-cache/` 均在 `.gitignore` 中，**不入库**；干净 clone 只保留示例清单，需本地放置
+    清单和权重；
+-   本地评测清单的 contract id 标注 `-agpl-evaluation-only`，导出报告的
+    `models[].id/version` 会带上该标记；
 -   该构建仅用于真机链路与性能评测，不得作为候选发布 APK。
 
 ## 6. 第三方依赖清单模板

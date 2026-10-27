@@ -14,6 +14,7 @@ import org.json.JSONObject
 
 object ModelBundleConfigLoader {
     const val DEFAULT_MANIFEST = "models/model-bundle.json"
+    const val CLASSICAL_LANE_MODE = "classical"
 
     private val DEFAULT_PLATE_DECODE = DetectionDecodeConfig(
         confidenceThreshold = 0.5f,
@@ -31,7 +32,7 @@ object ModelBundleConfigLoader {
         val vehicle = root.getJSONObject("vehicle")
         val lane = root.optJSONObject("lane")?.let { json ->
             LaneModelConfig(
-                asset = asset(json),
+                asset = laneAsset(json),
                 decode = LaneDecodeConfig(
                     laneDecodeThreshold(json.optJSONObject("decode")),
                 ),
@@ -70,6 +71,18 @@ object ModelBundleConfigLoader {
 
     private fun laneDecodeThreshold(json: JSONObject?): Float =
         json?.optDouble("threshold", 0.5)?.toFloat() ?: 0.5f
+
+    /**
+     * A lane section either names an ONNX asset or explicitly asks for the classical detector;
+     * a lane block with neither is a typo, not a silent downgrade.
+     */
+    private fun laneAsset(json: JSONObject): ModelAssetConfig? {
+        if (json.optString("assetPath").isNotEmpty()) return asset(json)
+        require(json.optString("mode") == CLASSICAL_LANE_MODE) {
+            "lane without an assetPath must declare \"mode\": \"$CLASSICAL_LANE_MODE\""
+        }
+        return null
+    }
 
     private fun detectionDecode(json: JSONObject?, default: DetectionDecodeConfig): DetectionDecodeConfig {
         if (json == null) return default

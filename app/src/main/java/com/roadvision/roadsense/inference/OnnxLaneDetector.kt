@@ -3,7 +3,7 @@ package com.roadvision.roadsense.inference
 import com.roadvision.roadsense.camera.ConvertedFrame
 
 class OnnxLaneDetector(
-    override val contract: ModelContract,
+    private val contract: ModelContract,
     private val assetPath: String,
     private val provider: ExecutionProvider,
     private val runtime: OrtRuntimeManager,

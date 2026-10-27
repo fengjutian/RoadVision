@@ -281,8 +281,8 @@ class RoadViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun describeModels(config: PipelineModelConfig): List<ModelDescriptor> = buildList {
         add(ModelDescriptor("vehicle", config.vehicle.contract.id, config.vehicle.contract.version, config.vehicle.contract.sha256))
-        config.lane?.let {
-            add(ModelDescriptor("lane", it.asset.contract.id, it.asset.contract.version, it.asset.contract.sha256))
+        config.lane?.asset?.let {
+            add(ModelDescriptor("lane", it.contract.id, it.contract.version, it.contract.sha256))
         }
         config.plateOcr?.let {
             add(ModelDescriptor("plate", it.plate.contract.id, it.plate.contract.version, it.plate.contract.sha256))

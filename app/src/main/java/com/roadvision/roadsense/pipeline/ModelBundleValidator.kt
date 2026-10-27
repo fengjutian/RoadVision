@@ -25,9 +25,10 @@ object ModelBundleValidator {
         validateAsset("vehicle", config.vehicle)
         validateDetectionOutput("vehicle", config.vehicle)
 
-        config.lane?.let { lane ->
-            validateAsset("lane", lane.asset)
-            validateLaneOutput("lane", lane.asset)
+        // A lane block without an asset is the weight-free classical detector: nothing to verify.
+        config.lane?.asset?.let { lane ->
+            validateAsset("lane", lane)
+            validateLaneOutput("lane", lane)
         }
 
         config.plateOcr?.let { plateOcr ->

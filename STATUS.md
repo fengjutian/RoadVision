@@ -35,14 +35,38 @@
 - 车辆-only 降级模式：清单中 `vehicle` 必填，`lane` 与 `plate`+`ocr` 可整段省略；省略的能力不加载、
   不产生结果，UI 明确显示降级模式；
 - 诊断口径区分采集、分析、跳过：没有活跃流水线时帧只计为跳过，不再计为已处理，分析 FPS 和延迟显示
-  “—”，并显示“推理未启用”。
+  “—”，并显示“推理未启用”；
+- 车辆检测已接入评测权重：`tools/export_vehicle_model.py` 把 YOLO11 内置 NMS 的 `[1,300,6]`
+  像素坐标归一化为契约要求的 `[1,N,6]`，app 侧零改动；`labels` 同时作为类别白名单，COCO
+  中的人、自行车等不会进入车辆跟踪；letterbox 填充值改为可配置（默认 114 灰），与 YOLO
+  训练预处理一致；
+- 车道当前走**无权重兜底**：清单里 `"lane": { "mode": "classical" }` 选用 `ClassicalLaneDetector`
+  （下半幅垂直边缘 → (斜率, 截距) 投票 → 左右各一条线），不需要权重也不需要许可审查；同一份
+  代码里 `assetPath` 一旦出现就切回 ONNX 车道模型，上层调度与叠加层不变。掩码解码同时升级为
+  多车道：行内非极大值抑制 + 邻近行连线，最多输出 3 条折线，不再把左右车道平均成一条；
+- 叠加层改为与 CameraX `PreviewView` 同一 Android 视图层级的 `RoadOverlayView`，避免 Compose Canvas
+  被相机预览遮挡；已用临时常量输出模型在真机确认车辆框、Track ID 和置信度标签可见；
+- 横竖屏自适应布局：按窗口尺寸切换；横屏把诊断/事件放进右侧栏、相机画面占满左侧剩余区域，竖屏折叠为
+  紧凑摘要（状态 + 采集/分析 FPS + 延迟 + 检测数），按“详情”展开受高度上限约束的完整诊断与事件列表；
+  控件按状态栏/挖孔/手势条安全区内缩；
+- 屏幕旋转时把显示方向下发给 `ImageAnalysis`，避免分析帧与叠加层停留在旋转前的方向；Activity 声明
+  `configChanges`，旋屏不重建界面、不中断已绑定的预览与前台采集。
 
 验证命令：`gradlew.bat testDebugUnitTest assembleDebug`。开发机结果为
-`BUILD SUCCESSFUL`，当前共有 59 项单元测试，生成
-`app/build/outputs/apk/debug/app-debug.apk`。APK 已包含 P2–P5 运行时代码，
-但不包含车辆、车道、车牌或 OCR 权重；在合法模型资产与模型卡就绪前，UI 明确保持模型禁用状态。
+`BUILD SUCCESSFUL`，当前共有 82 项单元测试，生成
+`app/build/outputs/apk/debug/app-debug.apk`。本地评测构建已接入车辆检测权重
+（Ultralytics YOLO11n，APK 内含 `model-bundle.json` 与 `models/vehicle/model.onnx`）；
+车道、车牌与 OCR 仍无权重，清单中省略后不加载也不产生结果。该权重为 AGPL-3.0、审查结论
+`BLOCKED`，只用于内部链路与性能评测，权重文件与本地评测清单均不入库（见
+`docs/DEPENDENCIES.md` 5.1）；干净 clone 只保留示例清单，需本地放置清单和权重。
 车辆-only 模板见 `app/src/main/assets/models/model-bundle.vehicle-only.json.example`，
 用于在其余权重未就绪时先验证车辆检测链路。
+
+布局验证：2026-10-27 在 Android 37 模拟器（1080×2400、420 dpi）上确认竖屏紧凑面板、展开/收起、
+横屏右侧诊断栏（画面占满剩余区域），以及旋屏后 `analysis.rotationDegrees` 从 90° 更新为 180°、
+分析尺寸从 480×640 变为 640×480；多次旋转未崩溃。模拟器 CPU 推理约 1.5 s/帧，其 FPS 与延迟不能作为
+性能数据。目标荣耀真机上的横竖屏布局、叠加对齐和旋屏行为仍未验证（见 `docs/DEVICE_TEST_PLAN.md`
+第 3 节第 9 项）。
 
 真机数据现状：2026-10-27 在 HONOR MLM-AN00（Android 17 / SDK 37）导出过一次**仅采集**
 基线，`cameraFps` 7.87、约 7 分钟、无推理；该导出为 `schemaVersion` 1，其
@@ -50,6 +74,16 @@
 `schemaVersion` 3：延迟改由分析器入口单调时钟计算并附带相机时钟偏移/异常计数，内存区分
 进程 PSS 与整机已用内存，新增实际分析尺寸/旋转/格式与采集时长，字段口径见
 `docs/DEVICE_TEST_PLAN.md` 第 5.1 节。
+
+同一天另做了一次车辆-only 短时真机验证：同一台 MLM-AN00 上加载 YOLO11n 评测权重，
+CPU 推理，采集 5.7 FPS、分析 4.9 FPS，推理 P50/P95 154.3/216.3 ms，丢弃 33 帧；当前镜头内
+无车辆，检测计数为 0。该结果只证明车辆-only 链路可运行，**不构成 15 FPS 或准确率结论**。
+
+同一模型的执行提供器对比（均为短时手持、同一台 MLM-AN00，不能替代正式基准）：
+CPU 推理 P50/P95 约 154/216 ms，表现最好；XNNPACK 约 323/497 ms，明显更慢；NNAPI
+在首次推理时报 `ORT_FAIL`。`PipelineFactory` 现在会在开始采集前用零输入预热每个已声明模型，
+因此 NNAPI 这类“Session 能建、第一次 run 失败”的提供器会回退 CPU，而不是把整条流水线切成
+Failed。15 FPS 目标仍未达到。
 
 **已确定的项目决定：** 项目名
 RoadVision；默认本地处理，未来允许用户主动上传；首版车辆检测、车道识别、跟踪、车牌

@@ -4,6 +4,7 @@ import android.content.Context
 import com.roadvision.roadsense.camera.ConvertedFrame
 import com.roadvision.roadsense.data.DetectionEventEntity
 import com.roadvision.roadsense.diagnostics.PerformanceRecorder
+import com.roadvision.roadsense.inference.ClassicalLaneDetector
 import com.roadvision.roadsense.inference.ExecutionProvider
 import com.roadvision.roadsense.inference.ModelAssetVerifier
 import com.roadvision.roadsense.inference.ModelContract
@@ -12,16 +13,18 @@ import com.roadvision.roadsense.inference.OnnxPlateDetector
 import com.roadvision.roadsense.inference.OnnxPlateRecognizer
 import com.roadvision.roadsense.inference.OnnxVehicleDetector
 import com.roadvision.roadsense.inference.OrtRuntimeManager
+import com.roadvision.roadsense.inference.OutputValidator
 import java.io.Closeable
 
 data class ModelAssetConfig(val assetPath: String, val contract: ModelContract)
 
 /**
  * Lane detection is optional. When absent the coordinator keeps publishing vehicle-only results;
- * it never reports a stale or synthetic lane.
+ * it never reports a stale or synthetic lane. A null [asset] selects the weight-free classical
+ * detector (see `ClassicalLaneDetector`), which needs no licence review and no APK weight.
  */
 data class LaneModelConfig(
-    val asset: ModelAssetConfig,
+    val asset: ModelAssetConfig?,
     val decode: LaneDecodeConfig = LaneDecodeConfig(),
 )
 
@@ -100,6 +103,10 @@ object PipelineFactory {
                 val coordinator = buildCoordinator(effective, runtime, recorder, onResult, onEvent)
                 // Open sessions eagerly so provider and model failures surface before capture starts.
                 assets.forEach { runtime.session(it.assetPath, provider) }
+                // Some execution providers accept a session but fail on the first run (NNAPI is a
+                // common case). Probe every declared model with zeros so the CPU retry is used
+                // instead of surfacing a runtime failure after capture has already started.
+                warmUp(runtime, assets, provider)
                 return ActivePipeline(
                     runtime = runtime,
                     coordinator = coordinator,
@@ -115,6 +122,31 @@ object PipelineFactory {
         throw lastError ?: IllegalStateException("No ONNX Runtime execution provider could be initialized")
     }
 
+    private fun warmUp(
+        runtime: OrtRuntimeManager,
+        assets: List<ModelAssetConfig>,
+        provider: ExecutionProvider,
+    ) {
+        assets.forEach { asset ->
+            val contract = asset.contract
+            val inputShape = contract.input.shape
+            val elements = inputShape.fold(1L) { total, dimension -> total * dimension }
+            require(elements in 1L..Int.MAX_VALUE.toLong()) { "Invalid input element count: $elements" }
+            val output = runtime.run(
+                asset.assetPath,
+                provider,
+                contract.input.name,
+                inputShape,
+                FloatArray(elements.toInt()),
+                contract.outputs.mapTo(mutableSetOf()) { it.name },
+            )
+            output.forEach { (name, tensor) ->
+                val spec = contract.outputs.first { it.name == name }
+                OutputValidator.validateShape(tensor.shape, spec.shape, name)
+            }
+        }
+    }
+
     private fun buildCoordinator(
         config: PipelineModelConfig,
         runtime: OrtRuntimeManager,
@@ -127,10 +159,12 @@ object PipelineFactory {
             config.vehicleLabels, config.vehicleDecode,
         ),
         laneDetector = config.lane?.let { lane ->
-            OnnxLaneDetector(
-                lane.asset.contract, lane.asset.assetPath, config.provider, runtime,
-                lane.decode.threshold,
-            )
+            lane.asset?.let { asset ->
+                OnnxLaneDetector(
+                    asset.contract, asset.assetPath, config.provider, runtime,
+                    lane.decode.threshold,
+                )
+            } ?: ClassicalLaneDetector(lane.decode.threshold)
         },
         plateDetector = config.plateOcr?.let { plateOcr ->
             OnnxPlateDetector(
@@ -164,7 +198,7 @@ internal fun enabledModels(config: PipelineModelConfig): List<String> = buildLis
 
 private fun PipelineModelConfig.assets(): List<ModelAssetConfig> = buildList {
     add(vehicle)
-    lane?.let { add(it.asset) }
+    lane?.asset?.let { add(it) }
     plateOcr?.let {
         add(it.plate)
         add(it.ocr)

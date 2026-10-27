@@ -4,7 +4,6 @@ import com.roadvision.roadsense.camera.ConvertedFrame
 import kotlin.math.abs
 
 interface LaneDetector {
-    val contract: ModelContract
     fun detect(frame: ConvertedFrame): LaneResult
 }
 

@@ -42,7 +42,6 @@ class PipelineCoordinatorTest {
                 )
             },
             laneDetector = object : LaneDetector {
-                override val contract = this@PipelineCoordinatorTest.contract
                 override fun detect(frame: ConvertedFrame) = LaneResult(
                     listOf(listOf(LanePoint(0f, 0f), LanePoint(1f, 1f))), 0.9f, frame.frameId, frame.timestampNs,
                 )
@@ -86,7 +85,6 @@ class PipelineCoordinatorTest {
                 )
             },
             laneDetector = object : LaneDetector {
-                override val contract = this@PipelineCoordinatorTest.contract
                 override fun detect(frame: ConvertedFrame) = LaneResult(
                     listOf(listOf(LanePoint(0f, 0f), LanePoint(1f, 1f))), 0.9f, frame.frameId, frame.timestampNs,
                 )
@@ -165,7 +163,6 @@ class PipelineCoordinatorTest {
                 }
             },
             laneDetector = object : LaneDetector {
-                override val contract = this@PipelineCoordinatorTest.contract
                 override fun detect(frame: ConvertedFrame) = LaneResult(
                     listOf(listOf(LanePoint(0f, 0f), LanePoint(1f, 1f))), 0.9f, frame.frameId, frame.timestampNs,
                 )
