@@ -69,6 +69,7 @@ CameraX
 
 -   [立项文档](docs/PROJECT_CHARTER.md)
 -   [需求范围与验收标准](docs/REQUIREMENTS.md)
+-   [当前技术架构（As-Built）](docs/ARCHITECTURE_CURRENT.md)
 -   [技术架构方案](docs/ARCHITECTURE.md)
 -   [首阶段任务拆分](docs/PHASE1_TASKS.md)
 -   [许可证与依赖审查](docs/DEPENDENCIES.md)
