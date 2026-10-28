@@ -26,6 +26,9 @@
 - 车牌-车辆关联要求连续多帧几何一致，未确认的关联不会写入本地事件；
 - OCR 调度、融合和已落库标记按活跃 Track 清理，长稳运行不随轨迹数无界增长；
 - 推理失败后关闭并重载流水线时复用进程级 ORT 环境，避免重试链路失效；
+- ORT Session 生命周期加读写锁：关闭前必须等在途 `run()` 返回，`FrameScheduler.close()` 也等待工作线程退出；
+  修复退出应用/重载模型时在推理线程 `roadvision-frame-*` 上触发的 libonnxruntime 原生崩溃
+  （SIGSEGV 空指针 / Scudo `invalid chunk state` 堆破坏），这类崩溃不会以 Java 异常形式出现；
 - XNNPACK/NNAPI 初始化失败自动回退 CPU，Session 在开始采集前预加载并失败即停；
 - 诊断面板增加错误计数；设置页支持停止/开始采集、保留期、Provider、阈值和模型信息；
 - 诊断报告导出（JSON，含设备/构建/模型 SHA-256/性能/事件），通过 FileProvider 分享；
